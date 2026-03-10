@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BugPredictor — AI Code Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #ff3c5f;
+    --accent2: #ff8c42;
+    --text: #e8e8f0;
+    --muted: #555570;
+    --success: #00e5a0;
+    --warning: #ffcc00;
+    --code-bg: #0d0d14;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255,60,95,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,60,95,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 32px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,95,0.4); }
+    50% { box-shadow: 0 0 20px 4px rgba(255,60,95,0.2); }
+  }
+
+  .logo-text {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--success);
+    background: rgba(0,229,160,0.08);
+    border: 1px solid rgba(0,229,160,0.2);
+    padding: 6px 14px;
+    border-radius: 100px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Hero */
+  .hero {
+    margin-bottom: 56px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -2px;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 .highlight {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 480px;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+
+  /* Main layout */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s ease 0.1s both;
+  }
+
+  @media (max-width: 768px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  .filename-input {
+    background: rgba(255,60,95,0.08);
+    border: 1px solid rgba(255,60,95,0.2);
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    width: 130px;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .filename-input:focus {
+    border-color: var(--accent);
+    background: rgba(255,60,95,0.12);
+  }
+
+  .code-editor {
+    width: 100%;
+    min-height: 300px;
+    background: var(--code-bg);
+    color: #c8c8e0;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    padding: 20px;
+    border: none;
+    outline: none;
+    resize: vertical;
+    tab-size: 2;
+  }
+
+  .code-editor::placeholder {
+    color: var(--muted);
+    opacity: 0.6;
+  }
+
+  /* Analyze button */
+  .analyze-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--accent);
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    margin-top: 24px;
+    border-radius: 12px;
+    animation: fadeUp 0.6s ease 0.2s both;
+  }
+
+  .analyze-btn:hover {
+    background: #ff1a3f;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(255,60,95,0.3);
+  }
+
+  .analyze-btn:active { transform: translateY(0); }
+
+  .analyze-btn.loading {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .analyze-btn .btn-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+
+  .analyze-btn.loading .spinner { display: block; }
+  .analyze-btn.loading .btn-text { display: none; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Results panel */
+  .result-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    animation: fadeUp 0.6s ease 0.15s both;
+    min-height: 400px;
+  }
+
+  .result-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 360px;
+    gap: 16px;
+    color: var(--muted);
+  }
+
+  .result-empty .empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+
+  .result-empty p {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .result-content {
+    padding: 24px;
+    display: none;
+  }
+
+  .result-content.visible { display: block; }
+
+  .prediction-text {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .prediction-text strong, .prediction-text b {
+    color: var(--accent);
+  }
+
+  /* Severity badge */
+  .severity-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .severity-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  .tag-critical {
+    background: rgba(255,60,95,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(255,60,95,0.3);
+  }
+
+  .tag-warning {
+    background: rgba(255,204,0,0.1);
+    color: var(--warning);
+    border: 1px solid rgba(255,204,0,0.2);
+  }
+
+  .tag-ok {
+    background: rgba(0,229,160,0.1);
+    color: var(--success);
+    border: 1px solid rgba(0,229,160,0.2);
+  }
+
+  /* Snapshot ID */
+  .snapshot-id {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: var(--code-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .snapshot-id span { color: var(--text); }
+
+  /* Log bug section */
+  .log-bug-section {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(255,140,66,0.05);
+    border: 1px solid rgba(255,140,66,0.15);
+    border-radius: 12px;
+  }
+
+  .log-bug-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent2);
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .log-bug-input {
+    width: 100%;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    margin-bottom: 10px;
+    transition: border-color 0.2s;
+  }
+
+  .log-bug-input:focus { border-color: var(--accent2); }
+
+  .log-bug-btn {
+    background: transparent;
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .log-bug-btn:hover {
+    background: var(--accent2);
+    color: var(--bg);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--surface);
+    border: 1px solid var(--success);
+    color: var(--success);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 100;
+  }
+
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  /* Examples */
+  .examples {
+    margin-top: 32px;
+    animation: fadeUp 0.6s ease 0.3s both;
+  }
+
+  .examples-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .examples-grid {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .example-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .example-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(255,60,95,0.05);
+  }
+
+  /* Markdown-like rendering */
+  .md h1, .md h2, .md h3 {
+    color: var(--accent);
+    margin: 16px 0 8px;
+    font-family: 'Syne', sans-serif;
+  }
+  .md code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--accent2);
+  }
+  .md pre {
+    background: var(--code-bg);
+    padding: 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+  .md pre code {
+    background: none;
+    padding: 0;
+    color: #c8c8e0;
+  }
+  .md ul, .md ol {
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  .md li { margin: 4px 0; color: var(--text); }
+  .md strong { color: var(--accent); }
+  .md p { margin: 8px 0; color: var(--text); line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<div class="container">
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">🐛</div>
+        <div class="logo-text">Bug<span>Predictor</span></div>
+      </div>
+      <div class="status-badge">
+        <div class="status-dot"></div>
+        API LIVE
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-label">⚡ AI-Assisted Bug Detection</div>
+    <h1>Predict bugs<br><span class="highlight">before they ship.</span></h1>
+    <p>Paste your code, get instant AI-powered bug predictions using vector similarity and Claude's reasoning.</p>
+  </div>
+
+  <div class="main-grid">
+    <!-- Input Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Code Input</div>
+        <input class="filename-input" id="filename" type="text" value="main.py" placeholder="filename.py">
+      </div>
+      <textarea class="code-editor" id="codeInput" placeholder="# Paste your code here...
+def divide(a, b):
+    return a / b"></textarea>
+    </div>
+
+    <!-- Result Panel -->
+    <div class="result-panel">
+      <div class="panel-header">
+        <div class="panel-title">AI Prediction</div>
+        <div id="statusBadge"></div>
+      </div>
+      <div class="result-empty" id="emptyState">
+        <div class="empty-icon">🔍</div>
+        <p>Awaiting analysis...</p>
+      </div>
+      <div class="result-content" id="resultContent">
+        <div class="severity-bar" id="severityBar"></div>
+        <div class="md" id="predictionText"></div>
+        <div class="snapshot-id" id="snapshotId"></div>
+        <div class="log-bug-section">
+          <div class="log-bug-title">🐛 Log a real bug</div>
+          <input class="log-bug-input" id="bugMessage" placeholder="Describe the actual error you encountered...">
+          <button class="log-bug-btn" onclick="logBug()">Log Bug</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">
+    <div class="btn-content">
+      <div class="spinner"></div>
+      <span class="btn-text">⚡ Analyze Code</span>
+    </div>
+  </button>
+
+  <div class="examples">
+    <div class="examples-title">Try an example</div>
+    <div class="examples-grid">
+      <div class="example-chip" onclick="loadExample('divide')">Division bug</div>
+      <div class="example-chip" onclick="loadExample('nullcheck')">Null check</div>
+      <div class="example-chip" onclick="loadExample('sql')">SQL injection</div>
+      <div class="example-chip" onclick="loadExample('async')">Async race</div>
+      <div class="example-chip" onclick="loadExample('list')">Index error</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const examples = {
+    divide: {
+      filename: 'math_utils.py',
+      code: `def divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\nprint(result)`
+    },
+    nullcheck: {
+      filename: 'user_service.py',
+      code: `def get_user_email(user):\n    return user.profile.email\n\nuser = None\nprint(get_user_email(user))`
+    },
+    sql: {
+      filename: 'db_query.py',
+      code: `def get_user(username):\n    query = f"SELECT * FROM users WHERE username = '{username}'"\n    return db.execute(query)`
+    },
+    async: {
+      filename: 'counter.js',
+      code: `let counter = 0;\n\nasync function increment() {\n    const val = counter;\n    await someAsyncOp();\n    counter = val + 1;\n}\n\nPromise.all([increment(), increment(), increment()]);`
+    },
+    list: {
+      filename: 'parser.py',
+      code: `def get_last_three(items):\n    return [items[-3], items[-2], items[-1]]\n\nresult = get_last_three([1, 2])\nprint(result)`
+    }
+  };
+
+  let currentSnapshotId = null;
+
+  function loadExample(key) {
+    const ex = examples[key];
+    document.getElementById('filename').value = ex.filename;
+    document.getElementById('codeInput').value = ex.code;
+    showToast('Example loaded!');
+  }
+
+  function renderMarkdown(text) {
+    return text
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      .replace(/^\* (.*$)/gim, '<li>$1</li>')
+      .replace(/^- (.*$)/gim, '<li>$1</li>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[h|l|p|u])/gm, '<p>')
+      .replace(/<p><\/p>/g, '');
+  }
+
+  function detectSeverity(text) {
+    const lower = text.toLowerCase();
+    const tags = [];
+    if (lower.includes('critical') || lower.includes('zero') || lower.includes('injection') || lower.includes('crash')) {
+      tags.push('<div class="severity-tag tag-critical">⚠ Critical</div>');
+    }
+    if (lower.includes('warning') || lower.includes('potential') || lower.includes('race') || lower.includes('null')) {
+      tags.push('<div class="severity-tag tag-warning">⚡ Warning</div>');
+    }
+    if (tags.length === 0) {
+      tags.push('<div class="severity-tag tag-ok">✓ Low Risk</div>');
+    }
+    return tags.join('');
+  }
+
+  async function analyze() {
+    const code = document.getElementById('codeInput').value.trim();
+    const filename = document.getElementById('filename').value.trim() || 'main.py';
+
+    if (!code) {
+      showToast('Please enter some code first!', true);
+      return;
+    }
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.classList.add('loading');
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, code })
+      });
+
+      if (!res.ok) throw new Error('API error');
+
+      const data = await res.json();
+      currentSnapshotId = data.snapshot_id;
+
+      // Show results
+      document.getElementById('emptyState').style.display = 'none';
+      const resultContent = document.getElementById('resultContent');
+      resultContent.classList.add('visible');
+
+      document.getElementById('severityBar').innerHTML = detectSeverity(data.prediction);
+      document.getElementById('predictionText').innerHTML = renderMarkdown(data.prediction);
+      document.getElementById('snapshotId').innerHTML = `Snapshot ID: <span>${data.snapshot_id.substring(0, 8)}...</span>`;
+
+      showToast('Analysis complete!');
+    } catch (err) {
+      showToast('Error connecting to API. Is the server running?', true);
+    } finally {
+      btn.classList.remove('loading');
+    }
+  }
+
+  async function logBug() {
+    const message = document.getElementById('bugMessage').value.trim();
+    if (!message || !currentSnapshotId) {
+      showToast('Run analysis first, then describe the bug!', true);
+      return;
+    }
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/log-bug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshot_id: currentSnapshotId, error_message: message })
+      });
+
+      if (!res.ok) throw new Error();
+      document.getElementById('bugMessage').value = '';
+      showToast('Bug logged! AI will learn from this 🧠');
+    } catch {
+      showToast('Failed to log bug.', true);
+    }
+  }
+
+  function showToast(msg, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.style.borderColor = isError ? 'var(--accent)' : 'var(--success)';
+    toast.style.color = isError ? 'var(--accent)' : 'var(--success)';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') analyze();
+  });
+</script>
+</body>
+</html>
