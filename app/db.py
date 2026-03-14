@@ -10,9 +10,10 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cur = conn.cursor()
+    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS code_snapshots (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             filename TEXT,
             code TEXT,
             embedding vector(1536),
@@ -21,7 +22,7 @@ def init_db():
     """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS bug_events (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             snapshot_id UUID REFERENCES code_snapshots(id),
             error_message TEXT,
             created_at TIMESTAMP DEFAULT NOW()
