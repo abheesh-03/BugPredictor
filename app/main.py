@@ -4,6 +4,7 @@ from app.db import get_connection, init_db
 from app.embeddings import get_embedding, find_similar_bugs
 import anthropic
 import os
+import hashlib
 from dotenv import load_dotenv
 import logging
 
@@ -53,6 +54,13 @@ class BugEvent(BaseModel):
         if not v.strip():
             raise ValueError('Error message cannot be empty')
         return v
+
+class IgnoreRequest(BaseModel):
+    code: str
+    filename: str
+
+def get_code_hash(code: str) -> str:
+    return hashlib.md5(code.strip().encode()).hexdigest()
 
 def get_language_rules(filename: str) -> str:
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
@@ -139,6 +147,29 @@ def analyze_code(input: CodeInput):
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
         raise HTTPException(status_code=503, detail="Database unavailable")
+
+    # Check if code is in ignore list
+    try:
+        code_hash = get_code_hash(input.code)
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            logger.info(f"Code is in ignore list, skipping analysis")
+            return {
+                "snapshot_id": "ignored",
+                "prediction": "No obvious bugs detected.",
+                "severity": "None",
+                "score": 0,
+                "confidence": 0,
+                "bug_line": 0,
+                "similar_past_bugs": [],
+                "ignored": True
+            }
+        cur.close()
+    except Exception as e:
+        logger.error(f"Ignore list check failed: {e}")
 
     try:
         embedding = get_embedding(input.code)
@@ -252,8 +283,43 @@ MESSAGE: No obvious bugs detected."""
         "score": score,
         "confidence": confidence,
         "bug_line": max(0, bug_line),
-        "similar_past_bugs": similar_bugs
+        "similar_past_bugs": similar_bugs,
+        "ignored": False
     }
+
+@app.post("/ignore")
+def ignore_code(request: IgnoreRequest):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        code_hash = get_code_hash(request.code)
+        cur.execute("""
+            INSERT INTO ignored_patterns (code_hash, filename)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING;
+        """, (code_hash, request.filename))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "Code pattern ignored successfully"}
+    except Exception as e:
+        logger.error(f"Failed to ignore pattern: {e}")
+        raise HTTPException(status_code=500, detail="Failed to ignore pattern")
+
+@app.delete("/ignore")
+def unignore_code(request: IgnoreRequest):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        code_hash = get_code_hash(request.code)
+        cur.execute("DELETE FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "Code pattern unignored successfully"}
+    except Exception as e:
+        logger.error(f"Failed to unignore pattern: {e}")
+        raise HTTPException(status_code=500, detail="Failed to unignore pattern")
 
 @app.post("/fix")
 def fix_code(input: CodeInput):
