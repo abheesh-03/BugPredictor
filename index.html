@@ -216,23 +216,34 @@
   .timeline-label { flex: 1; font-family: 'Space Mono', monospace; font-size: 8px; color: var(--muted); text-align: center; }
   .refresh-stats-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; margin-left: auto; display: block; margin-bottom: 16px; }
   .refresh-stats-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Team Section */
+  .team-section { margin-top: 48px; padding-bottom: 48px; }
+  .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .team-grid { grid-template-columns: 1fr; } }
+  .team-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .team-panel-title { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .team-input { width: 100%; background: var(--code-bg); border: 1px solid var(--border); color: var(--text); font-family: 'Space Mono', monospace; font-size: 12px; padding: 10px 14px; border-radius: 8px; outline: none; margin-bottom: 10px; }
+  .team-input:focus { border-color: var(--success); }
+  .team-btn { background: transparent; border: 1px solid var(--success); color: var(--success); font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; width: 100%; }
+  .team-btn:hover { background: var(--success); color: var(--bg); }
+  .team-result { margin-top: 12px; padding: 12px; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.2); border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--success); display: none; }
+  .team-result.visible { display: block; }
+  .invite-code { font-size: 20px; font-weight: 700; letter-spacing: 4px; color: var(--success); margin: 8px 0; }
+  .active-team-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); color: var(--success); font-family: 'Space Mono', monospace; font-size: 10px; padding: 4px 10px; border-radius: 100px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
 <div class="noise"></div>
 
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
-
 <div class="drawer" id="historyDrawer">
   <div class="drawer-header">
     <div class="drawer-title">Bug History</div>
     <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
   <div class="drawer-list" id="drawerList">
-    <div class="drawer-empty">
-      <div class="empty-icon">📭</div>
-      <p>No bugs logged yet.<br>Analyze some code!</p>
-    </div>
+    <div class="drawer-empty"><div class="empty-icon">📭</div><p>No bugs logged yet.<br>Analyze some code!</p></div>
   </div>
   <button class="drawer-refresh" onclick="loadHistory()">↻ Refresh</button>
 </div>
@@ -245,13 +256,9 @@
         <div class="logo-text">Bug<span>Predictor</span></div>
       </div>
       <div class="header-right">
-        <button class="history-btn" onclick="openDrawer()">
-          🐛 History <span class="bug-count-badge" id="bugCount">0</span>
-        </button>
-        <div class="status-badge">
-          <div class="status-dot"></div>
-          API LIVE
-        </div>
+        <div id="activeTeamBadge" style="display:none;" class="active-team-badge">👥 <span id="activeTeamName"></span></div>
+        <button class="history-btn" onclick="openDrawer()">🐛 History <span class="bug-count-badge" id="bugCount">0</span></button>
+        <div class="status-badge"><div class="status-dot"></div>API LIVE</div>
       </div>
     </div>
   </header>
@@ -270,23 +277,17 @@
       </div>
       <div class="code-wrapper">
         <div class="line-numbers" id="lineNumbers">1</div>
-        <textarea class="code-editor" id="codeInput" placeholder="# Paste your code here...
-def divide(a, b):
-    return a / b" oninput="updateLineNumbers()"></textarea>
+        <textarea class="code-editor" id="codeInput" placeholder="# Paste your code here..." oninput="updateLineNumbers()"></textarea>
       </div>
       <div class="bug-line-highlight" id="bugLineHighlight">
-        <span>📍</span>
-        <span id="bugLineText"></span>
+        <span>📍</span><span id="bugLineText"></span>
       </div>
     </div>
 
     <div class="result-panel">
-      <div class="panel-header">
-        <div class="panel-title">AI Prediction</div>
-      </div>
+      <div class="panel-header"><div class="panel-title">AI Prediction</div></div>
       <div class="result-empty" id="emptyState">
-        <div class="empty-icon">🔍</div>
-        <p>Awaiting analysis...</p>
+        <div class="empty-icon">🔍</div><p>Awaiting analysis...</p>
       </div>
       <div class="result-content" id="resultContent">
         <div class="severity-bar" id="severityBar"></div>
@@ -302,10 +303,7 @@ def divide(a, b):
             <div class="meter-bar"><div class="meter-fill confidence-fill" id="confidenceBar" style="width:0%"></div></div>
           </div>
         </div>
-        <div class="memory-note" id="memoryNote">
-          <span>📚</span>
-          <span id="memoryNoteText"></span>
-        </div>
+        <div class="memory-note" id="memoryNote"><span>📚</span><span id="memoryNoteText"></span></div>
         <div class="md" id="predictionText"></div>
         <div class="snapshot-id" id="snapshotId"></div>
         <div class="action-buttons" id="actionButtons" style="display:none;">
@@ -344,27 +342,41 @@ def divide(a, b):
     </div>
   </div>
 
+  <!-- Team Section -->
+  <div class="team-section">
+    <div class="stats-title">👥 Team Shared Memory</div>
+    <div class="team-grid">
+      <div class="team-panel">
+        <div class="team-panel-title">🚀 Create a Team</div>
+        <input class="team-input" id="teamNameInput" placeholder="Enter team name...">
+        <button class="team-btn" onclick="createTeam()">Create Team</button>
+        <div class="team-result" id="createTeamResult">
+          <div>Team created! Share this invite code:</div>
+          <div class="invite-code" id="inviteCodeDisplay"></div>
+          <div style="font-size:10px; color: var(--muted); margin-top:4px;">Team members can use this code to join and share bug memory</div>
+        </div>
+      </div>
+      <div class="team-panel">
+        <div class="team-panel-title">🔗 Join a Team</div>
+        <input class="team-input" id="joinInviteCode" placeholder="Enter invite code...">
+        <input class="team-input" id="joinUsername" placeholder="Your username or email...">
+        <button class="team-btn" onclick="joinTeam()">Join Team</button>
+        <div class="team-result" id="joinTeamResult">
+          <div id="joinTeamMessage"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Stats Dashboard -->
   <div class="stats-section">
     <div class="stats-title">📊 Bug Trends Dashboard</div>
     <button class="refresh-stats-btn" onclick="loadStats()">↻ Refresh Stats</button>
     <div class="stats-cards">
-      <div class="stat-card">
-        <div class="stat-number" id="statTotalBugs">—</div>
-        <div class="stat-label">Bugs Logged</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number" id="statTotalSnapshots">—</div>
-        <div class="stat-label">Code Snapshots</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number" id="statCritical" style="color: var(--accent)">—</div>
-        <div class="stat-label">Critical Bugs</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-number" id="statWarning" style="color: var(--warning)">—</div>
-        <div class="stat-label">Warnings</div>
-      </div>
+      <div class="stat-card"><div class="stat-number" id="statTotalBugs">—</div><div class="stat-label">Bugs Logged</div></div>
+      <div class="stat-card"><div class="stat-number" id="statTotalSnapshots">—</div><div class="stat-label">Code Snapshots</div></div>
+      <div class="stat-card"><div class="stat-number" id="statCritical" style="color: var(--accent)">—</div><div class="stat-label">Critical Bugs</div></div>
+      <div class="stat-card"><div class="stat-number" id="statWarning" style="color: var(--warning)">—</div><div class="stat-label">Warnings</div></div>
     </div>
     <div class="stats-grid">
       <div class="stats-panel">
@@ -392,6 +404,8 @@ def divide(a, b):
 
 <script>
   const API = 'https://web-production-cb79b.up.railway.app';
+  let currentTeamId = null;
+  let currentTeamName = null;
 
   const examples = {
     divide: { filename: 'math_utils.py', code: `def divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\nprint(result)` },
@@ -474,9 +488,7 @@ def divide(a, b):
             <div class="history-message">${bug.error_message}</div>
           </div>`;
       }).join('');
-    } catch {
-      showToast('Could not load history', true);
-    }
+    } catch { showToast('Could not load history', true); }
   }
 
   function loadFromHistory(filename, code) {
@@ -524,10 +536,13 @@ def divide(a, b):
     updateLineNumbers();
 
     try {
+      const body = { filename, code };
+      if (currentTeamId) body.team_id = currentTeamId;
+
       const res = await fetch(`${API}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, code })
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) throw new Error();
@@ -594,6 +609,53 @@ def divide(a, b):
     }
   }
 
+  async function createTeam() {
+    const name = document.getElementById('teamNameInput').value.trim();
+    if (!name) { showToast('Enter a team name!', true); return; }
+    try {
+      const res = await fetch(`${API}/team/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      currentTeamId = data.team_id;
+      currentTeamName = data.name;
+      document.getElementById('inviteCodeDisplay').textContent = data.invite_code;
+      document.getElementById('createTeamResult').classList.add('visible');
+      document.getElementById('activeTeamBadge').style.display = 'flex';
+      document.getElementById('activeTeamName').textContent = data.name;
+      showToast(`Team "${data.name}" created! 🎉`);
+    } catch {
+      showToast('Failed to create team', true);
+    }
+  }
+
+  async function joinTeam() {
+    const invite_code = document.getElementById('joinInviteCode').value.trim();
+    const user_identifier = document.getElementById('joinUsername').value.trim();
+    if (!invite_code || !user_identifier) { showToast('Fill in all fields!', true); return; }
+    try {
+      const res = await fetch(`${API}/team/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invite_code, user_identifier })
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      currentTeamId = data.team_id;
+      currentTeamName = data.team_name;
+      document.getElementById('joinTeamMessage').textContent = data.message;
+      document.getElementById('joinTeamResult').classList.add('visible');
+      document.getElementById('activeTeamBadge').style.display = 'flex';
+      document.getElementById('activeTeamName').textContent = data.team_name;
+      showToast(`Joined "${data.team_name}"! 🎉`);
+    } catch {
+      showToast('Invalid invite code', true);
+    }
+  }
+
   async function toggleIgnore() {
     const code = document.getElementById('codeInput').value.trim();
     const filename = document.getElementById('filename').value.trim() || 'main.py';
@@ -616,9 +678,7 @@ def divide(a, b):
         btn.classList.remove('ignored');
         showToast('Pattern unignored!');
       }
-    } catch {
-      showToast('Failed to update ignore list', true);
-    }
+    } catch { showToast('Failed to update ignore list', true); }
   }
 
   async function fixCode() {
@@ -675,16 +735,13 @@ def divide(a, b):
       showToast('Bug logged! 🧠');
       loadHistory();
       loadStats();
-    } catch {
-      showToast('Failed to log bug.', true);
-    }
+    } catch { showToast('Failed to log bug.', true); }
   }
 
   async function loadStats() {
     try {
       const res = await fetch(`${API}/stats`);
       const data = await res.json();
-
       document.getElementById('statTotalBugs').textContent = data.total_bugs;
       document.getElementById('statTotalSnapshots').textContent = data.total_snapshots;
       document.getElementById('statCritical').textContent = data.severity_breakdown.critical;
@@ -725,9 +782,7 @@ def divide(a, b):
       } else {
         document.getElementById('timeline').innerHTML = '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet — analyze some code!</div>';
       }
-    } catch {
-      console.log('Could not load stats');
-    }
+    } catch { console.log('Could not load stats'); }
   }
 
   function showToast(msg, isError = false) {
