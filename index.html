@@ -41,9 +41,7 @@
   .header-inner { display: flex; align-items: center; justify-content: space-between; }
   .logo { display: flex; align-items: center; gap: 12px; }
   .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; animation: pulse-glow 3s ease-in-out infinite; }
-
   @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,95,0.4); } 50% { box-shadow: 0 0 20px 4px rgba(255,60,95,0.2); } }
-
   .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
   .logo-text span { color: var(--accent); }
   .header-right { display: flex; align-items: center; gap: 12px; }
@@ -183,6 +181,41 @@
   .md li { margin: 4px 0; color: var(--text); }
   .md strong { color: var(--accent); }
   .md p { margin: 8px 0; color: var(--text); line-height: 1.7; }
+
+  /* Stats Dashboard */
+  .stats-section { margin-top: 48px; padding-bottom: 48px; animation: fadeUp 0.6s ease 0.4s both; }
+  .stats-title { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+  .stats-title::before { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .stats-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .stats-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 768px) { .stats-cards { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; transition: all 0.2s; }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-number { font-family: 'Space Mono', monospace; font-size: 32px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 6px; }
+  .stat-label { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr; } }
+  .stats-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .stats-panel-title { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+  .bar-item { display: flex; align-items: center; gap: 10px; }
+  .bar-label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.8s ease; }
+  .bar-count { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text); width: 24px; text-align: right; }
+  .severity-donut { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .donut-item { display: flex; align-items: center; gap: 8px; }
+  .donut-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .donut-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text); }
+  .donut-count { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); }
+  .timeline { display: flex; align-items: flex-end; gap: 6px; height: 80px; }
+  .timeline-bar { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; opacity: 0.7; transition: all 0.3s; min-height: 4px; position: relative; }
+  .timeline-bar:hover { opacity: 1; }
+  .timeline-bar::after { content: attr(data-count); position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-family: 'Space Mono', monospace; font-size: 9px; color: var(--muted); white-space: nowrap; }
+  .timeline-labels { display: flex; gap: 6px; margin-top: 6px; }
+  .timeline-label { flex: 1; font-family: 'Space Mono', monospace; font-size: 8px; color: var(--muted); text-align: center; }
+  .refresh-stats-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; margin-left: auto; display: block; margin-bottom: 16px; }
+  .refresh-stats-btn:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -257,7 +290,6 @@ def divide(a, b):
       </div>
       <div class="result-content" id="resultContent">
         <div class="severity-bar" id="severityBar"></div>
-
         <div class="meters" id="meters" style="display:none;">
           <div class="meter">
             <div class="meter-label">Severity Score</div>
@@ -270,26 +302,21 @@ def divide(a, b):
             <div class="meter-bar"><div class="meter-fill confidence-fill" id="confidenceBar" style="width:0%"></div></div>
           </div>
         </div>
-
         <div class="memory-note" id="memoryNote">
           <span>📚</span>
           <span id="memoryNoteText"></span>
         </div>
         <div class="md" id="predictionText"></div>
         <div class="snapshot-id" id="snapshotId"></div>
-
-        <!-- Action buttons -->
         <div class="action-buttons" id="actionButtons" style="display:none;">
           <button class="fix-btn" id="fixBtn" onclick="fixCode()">✨ Fix with AI</button>
           <button class="ignore-btn" id="ignoreBtn" onclick="toggleIgnore()">🚫 Ignore</button>
         </div>
-
         <div class="fix-result" id="fixResult" style="display:none;">
           <div class="fix-explanation" id="fixExplanation"></div>
           <pre class="fix-code" id="fixCode"></pre>
           <button class="apply-fix-btn" onclick="applyFix()">⚡ Apply Fix</button>
         </div>
-
         <div class="log-bug-section">
           <div class="log-bug-title">🐛 Log a real bug</div>
           <input class="log-bug-input" id="bugMessage" placeholder="Describe the actual error you encountered...">
@@ -314,6 +341,49 @@ def divide(a, b):
       <div class="example-chip" onclick="loadExample('sql')">SQL injection</div>
       <div class="example-chip" onclick="loadExample('async')">Async race</div>
       <div class="example-chip" onclick="loadExample('list')">Index error</div>
+    </div>
+  </div>
+
+  <!-- Stats Dashboard -->
+  <div class="stats-section">
+    <div class="stats-title">📊 Bug Trends Dashboard</div>
+    <button class="refresh-stats-btn" onclick="loadStats()">↻ Refresh Stats</button>
+    <div class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-number" id="statTotalBugs">—</div>
+        <div class="stat-label">Bugs Logged</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statTotalSnapshots">—</div>
+        <div class="stat-label">Code Snapshots</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statCritical" style="color: var(--accent)">—</div>
+        <div class="stat-label">Critical Bugs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="statWarning" style="color: var(--warning)">—</div>
+        <div class="stat-label">Warnings</div>
+      </div>
+    </div>
+    <div class="stats-grid">
+      <div class="stats-panel">
+        <div class="stats-panel-title">🐛 Bug Types</div>
+        <div class="bar-chart" id="bugTypesChart"><div style="color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px;">Loading...</div></div>
+      </div>
+      <div class="stats-panel">
+        <div class="stats-panel-title">📁 Most Buggy Files</div>
+        <div class="bar-chart" id="bugsByFileChart"><div style="color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px;">Loading...</div></div>
+      </div>
+      <div class="stats-panel">
+        <div class="stats-panel-title">⚡ Severity Breakdown</div>
+        <div class="severity-donut" id="severityBreakdown"><div style="color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px;">Loading...</div></div>
+      </div>
+      <div class="stats-panel">
+        <div class="stats-panel-title">📈 Bugs Last 7 Days</div>
+        <div class="timeline" id="timeline"><div style="color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px;">Loading...</div></div>
+        <div class="timeline-labels" id="timelineLabels"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -516,6 +586,7 @@ def divide(a, b):
 
       showToast('Analysis complete!');
       loadHistory();
+      loadStats();
     } catch {
       showToast('Error connecting to API. Is the server running?', true);
     } finally {
@@ -527,7 +598,6 @@ def divide(a, b):
     const code = document.getElementById('codeInput').value.trim();
     const filename = document.getElementById('filename').value.trim() || 'main.py';
     const btn = document.getElementById('ignoreBtn');
-
     const method = isIgnored ? 'DELETE' : 'POST';
     try {
       const res = await fetch(`${API}/ignore`, {
@@ -536,12 +606,11 @@ def divide(a, b):
         body: JSON.stringify({ code, filename })
       });
       if (!res.ok) throw new Error();
-
       isIgnored = !isIgnored;
       if (isIgnored) {
         btn.textContent = '✅ Ignored';
         btn.classList.add('ignored');
-        showToast('Pattern ignored! Won\'t flag this again 🚫');
+        showToast("Pattern ignored! Won't flag this again 🚫");
       } else {
         btn.textContent = '🚫 Ignore';
         btn.classList.remove('ignored');
@@ -559,7 +628,6 @@ def divide(a, b):
     btn.classList.add('loading');
     btn.textContent = '✨ Fixing...';
     document.getElementById('fixResult').style.display = 'none';
-
     try {
       const res = await fetch(`${API}/fix`, {
         method: 'POST',
@@ -606,8 +674,59 @@ def divide(a, b):
       document.getElementById('bugMessage').value = '';
       showToast('Bug logged! 🧠');
       loadHistory();
+      loadStats();
     } catch {
       showToast('Failed to log bug.', true);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API}/stats`);
+      const data = await res.json();
+
+      document.getElementById('statTotalBugs').textContent = data.total_bugs;
+      document.getElementById('statTotalSnapshots').textContent = data.total_snapshots;
+      document.getElementById('statCritical').textContent = data.severity_breakdown.critical;
+      document.getElementById('statWarning').textContent = data.severity_breakdown.warning;
+
+      const maxType = Math.max(...data.bug_types.map(b => b.count), 1);
+      document.getElementById('bugTypesChart').innerHTML = data.bug_types.length
+        ? data.bug_types.map(b => `
+          <div class="bar-item">
+            <div class="bar-label">${b.type}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxType)*100}%"></div></div>
+            <div class="bar-count">${b.count}</div>
+          </div>`).join('')
+        : '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet</div>';
+
+      const maxFile = Math.max(...data.bugs_by_file.map(b => b.count), 1);
+      document.getElementById('bugsByFileChart').innerHTML = data.bugs_by_file.length
+        ? data.bugs_by_file.map(b => `
+          <div class="bar-item">
+            <div class="bar-label">${b.filename}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxFile)*100}%; background: linear-gradient(90deg, #4f46e5, #7c3aed)"></div></div>
+            <div class="bar-count">${b.count}</div>
+          </div>`).join('')
+        : '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet</div>';
+
+      const s = data.severity_breakdown;
+      document.getElementById('severityBreakdown').innerHTML = `
+        <div class="donut-item"><div class="donut-dot" style="background:var(--accent)"></div><div class="donut-label">Critical</div><div class="donut-count">${s.critical}</div></div>
+        <div class="donut-item"><div class="donut-dot" style="background:var(--warning)"></div><div class="donut-label">Warning</div><div class="donut-count">${s.warning}</div></div>
+        <div class="donut-item"><div class="donut-dot" style="background:var(--muted)"></div><div class="donut-label">Other</div><div class="donut-count">${s.other}</div></div>`;
+
+      if (data.bugs_over_time.length > 0) {
+        const maxCount = Math.max(...data.bugs_over_time.map(d => d.count), 1);
+        document.getElementById('timeline').innerHTML = data.bugs_over_time.map(d => `
+          <div class="timeline-bar" style="height:${Math.max((d.count/maxCount)*100, 5)}%" data-count="${d.count}"></div>`).join('');
+        document.getElementById('timelineLabels').innerHTML = data.bugs_over_time.map(d => `
+          <div class="timeline-label">${d.day.slice(5)}</div>`).join('');
+      } else {
+        document.getElementById('timeline').innerHTML = '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet — analyze some code!</div>';
+      }
+    } catch {
+      console.log('Could not load stats');
     }
   }
 
@@ -627,6 +746,7 @@ def divide(a, b):
 
   updateLineNumbers();
   loadHistory();
+  loadStats();
 </script>
 </body>
 </html>
