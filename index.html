@@ -163,6 +163,17 @@
   .snapshot-id { margin-top: 20px; padding: 12px 16px; background: var(--code-bg); border-radius: 8px; border: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; }
   .snapshot-id span { color: var(--text); }
 
+  /* Fix with AI styles */
+  .fix-section { margin-bottom: 16px; }
+  .fix-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+  .fix-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .fix-btn.loading { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .fix-result { margin-top: 12px; padding: 14px; background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.2); border-radius: 10px; }
+  .fix-explanation { font-size: 12px; color: #a78bfa; font-family: 'Space Mono', monospace; margin-bottom: 10px; }
+  .fix-code { background: var(--code-bg); padding: 12px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: #c8c8e0; overflow-x: auto; white-space: pre-wrap; border: 1px solid var(--border); margin-bottom: 10px; }
+  .apply-fix-btn { background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s; }
+  .apply-fix-btn:hover { background: #6d28d9; }
+
   .log-bug-section { margin-top: 16px; padding: 16px; background: rgba(255,140,66,0.05); border: 1px solid rgba(255,140,66,0.15); border-radius: 12px; }
   .log-bug-title { font-size: 12px; font-weight: 700; color: var(--accent2); margin-bottom: 10px; letter-spacing: 1px; text-transform: uppercase; font-family: 'Space Mono', monospace; }
   .log-bug-input { width: 100%; background: var(--code-bg); border: 1px solid var(--border); color: var(--text); font-family: 'Space Mono', monospace; font-size: 12px; padding: 10px 14px; border-radius: 8px; outline: none; margin-bottom: 10px; }
@@ -267,6 +278,17 @@ def divide(a, b):
         </div>
         <div class="md" id="predictionText"></div>
         <div class="snapshot-id" id="snapshotId"></div>
+
+        <!-- Fix with AI -->
+        <div class="fix-section" id="fixSection" style="display:none; margin-top: 16px;">
+          <button class="fix-btn" id="fixBtn" onclick="fixCode()">✨ Fix with AI</button>
+          <div class="fix-result" id="fixResult" style="display:none;">
+            <div class="fix-explanation" id="fixExplanation"></div>
+            <pre class="fix-code" id="fixCode"></pre>
+            <button class="apply-fix-btn" onclick="applyFix()">⚡ Apply Fix</button>
+          </div>
+        </div>
+
         <div class="log-bug-section">
           <div class="log-bug-title">🐛 Log a real bug</div>
           <input class="log-bug-input" id="bugMessage" placeholder="Describe the actual error you encountered...">
@@ -309,6 +331,7 @@ def divide(a, b):
   };
 
   let currentSnapshotId = null;
+  let currentFixedCode = '';
 
   function openDrawer() {
     document.getElementById('historyDrawer').classList.add('open');
@@ -341,6 +364,8 @@ def divide(a, b):
     document.getElementById('codeInput').value = ex.code;
     updateLineNumbers();
     document.getElementById('bugLineHighlight').classList.remove('visible');
+    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('fixResult').style.display = 'none';
     showToast('Example loaded!');
   }
 
@@ -413,6 +438,8 @@ def divide(a, b):
     btn.classList.add('loading');
     document.getElementById('bugLineHighlight').classList.remove('visible');
     document.getElementById('memoryNote').classList.remove('visible');
+    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('fixResult').style.display = 'none';
     updateLineNumbers();
 
     try {
@@ -457,12 +484,60 @@ def divide(a, b):
         document.getElementById('memoryNote').classList.add('visible');
       }
 
+      // Show fix button if bug found
+      if (!isNone) {
+        document.getElementById('fixSection').style.display = 'block';
+      }
+
       showToast('Analysis complete!');
       loadHistory();
     } catch {
       showToast('Error connecting to API. Is the server running?', true);
     } finally {
       btn.classList.remove('loading');
+    }
+  }
+
+  async function fixCode() {
+    const code = document.getElementById('codeInput').value.trim();
+    const filename = document.getElementById('filename').value.trim() || 'main.py';
+
+    const btn = document.getElementById('fixBtn');
+    btn.classList.add('loading');
+    btn.textContent = '✨ Fixing...';
+    document.getElementById('fixResult').style.display = 'none';
+
+    try {
+      const res = await fetch(`${API}/fix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, code })
+      });
+
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+
+      currentFixedCode = data.fixed_code;
+      document.getElementById('fixExplanation').textContent = `✅ ${data.explanation}`;
+      document.getElementById('fixCode').textContent = data.fixed_code;
+      document.getElementById('fixResult').style.display = 'block';
+      showToast('Fix generated! 🎉');
+    } catch {
+      showToast('Failed to fix code', true);
+    } finally {
+      btn.classList.remove('loading');
+      btn.textContent = '✨ Fix with AI';
+    }
+  }
+
+  function applyFix() {
+    if (currentFixedCode) {
+      document.getElementById('codeInput').value = currentFixedCode;
+      updateLineNumbers();
+      document.getElementById('fixResult').style.display = 'none';
+      document.getElementById('fixSection').style.display = 'none';
+      document.getElementById('bugLineHighlight').classList.remove('visible');
+      showToast('Fix applied! Re-analyze to verify ✅');
     }
   }
 

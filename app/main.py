@@ -166,6 +166,43 @@ MESSAGE: No obvious bugs detected."""
         "similar_past_bugs": similar_bugs
     }
 
+@app.post("/fix")
+def fix_code(input: CodeInput):
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""You are an expert code fixer. Fix the bugs in this code.
+
+Code from {input.filename}:
+{input.code}
+
+IMPORTANT: You must respond in this exact format:
+FIXED_CODE: <the complete fixed code with no markdown, no backticks, just raw code>
+EXPLANATION: <one sentence explaining what you fixed>"""
+                }
+            ]
+        )
+
+        raw = message.content[0].text.strip()
+        fixed_code = ""
+        explanation = ""
+
+        if "FIXED_CODE:" in raw and "EXPLANATION:" in raw:
+            fixed_code = raw.split("FIXED_CODE:", 1)[1].split("EXPLANATION:")[0].strip()
+            explanation = raw.split("EXPLANATION:", 1)[1].strip()
+
+        return {
+            "fixed_code": fixed_code,
+            "explanation": explanation
+        }
+    except Exception as e:
+        logger.error(f"Fix failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fix code")
+
 @app.post("/log-bug")
 def log_bug(bug: BugEvent):
     try:
