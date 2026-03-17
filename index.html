@@ -20,14 +20,7 @@
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; overflow-x: hidden; }
 
   body::before {
     content: '';
@@ -41,35 +34,22 @@
     z-index: 0;
   }
 
-  .noise {
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.4;
-  }
+  .noise { position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"); pointer-events: none; z-index: 0; opacity: 0.4; }
 
   .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
-
   header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
   .header-inner { display: flex; align-items: center; justify-content: space-between; }
   .logo { display: flex; align-items: center; gap: 12px; }
   .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; animation: pulse-glow 3s ease-in-out infinite; }
 
-  @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,95,0.4); }
-    50% { box-shadow: 0 0 20px 4px rgba(255,60,95,0.2); }
-  }
+  @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,95,0.4); } 50% { box-shadow: 0 0 20px 4px rgba(255,60,95,0.2); } }
 
   .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
   .logo-text span { color: var(--accent); }
   .header-right { display: flex; align-items: center; gap: 12px; }
-
   .history-btn { display: flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
   .history-btn:hover { border-color: var(--accent); color: var(--accent); }
   .bug-count-badge { background: rgba(255,60,95,0.15); color: var(--accent); font-size: 10px; padding: 1px 6px; border-radius: 100px; border: 1px solid rgba(255,60,95,0.3); }
-
   .status-badge { display: flex; align-items: center; gap: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--success); background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); padding: 6px 14px; border-radius: 100px; }
   .status-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: blink 2s ease-in-out infinite; }
   @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -118,7 +98,6 @@
   .panel-title::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
   .filename-input { background: rgba(255,60,95,0.08); border: 1px solid rgba(255,60,95,0.2); color: var(--accent); font-family: 'Space Mono', monospace; font-size: 12px; padding: 4px 10px; border-radius: 6px; width: 130px; outline: none; }
   .filename-input:focus { border-color: var(--accent); }
-
   .code-wrapper { position: relative; display: flex; }
   .line-numbers { background: var(--code-bg); padding: 20px 12px 20px 16px; font-family: 'Space Mono', monospace; font-size: 13px; line-height: 1.7; color: var(--muted); text-align: right; user-select: none; min-width: 40px; border-right: 1px solid var(--border); }
   .line-numbers .bug-line { color: var(--accent); font-weight: 700; }
@@ -151,7 +130,6 @@
   .tag-ok { background: rgba(0,229,160,0.1); color: var(--success); border: 1px solid rgba(0,229,160,0.2); }
   .tag-line { background: rgba(255,140,66,0.1); color: var(--accent2); border: 1px solid rgba(255,140,66,0.25); }
 
-  /* Score & Confidence meters */
   .meters { display: flex; gap: 12px; margin-bottom: 16px; }
   .meter { flex: 1; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
   .meter-label { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
@@ -167,10 +145,14 @@
   .snapshot-id { margin-top: 20px; padding: 12px 16px; background: var(--code-bg); border-radius: 8px; border: 1px solid var(--border); font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; }
   .snapshot-id span { color: var(--text); }
 
-  .fix-section { margin-top: 16px; }
-  .fix-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+  .action-buttons { display: flex; gap: 10px; margin-top: 16px; }
+  .fix-btn { flex: 1; padding: 12px; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
   .fix-btn:hover { opacity: 0.9; transform: translateY(-1px); }
   .fix-btn.loading { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .ignore-btn { padding: 12px 16px; background: transparent; border: 1px solid var(--muted); color: var(--muted); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border-radius: 10px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .ignore-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ignore-btn.ignored { border-color: var(--success); color: var(--success); }
+
   .fix-result { margin-top: 12px; padding: 14px; background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.2); border-radius: 10px; }
   .fix-explanation { font-size: 12px; color: #a78bfa; font-family: 'Space Mono', monospace; margin-bottom: 10px; }
   .fix-code { background: var(--code-bg); padding: 12px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: #c8c8e0; overflow-x: auto; white-space: pre-wrap; border: 1px solid var(--border); margin-bottom: 10px; }
@@ -276,7 +258,6 @@ def divide(a, b):
       <div class="result-content" id="resultContent">
         <div class="severity-bar" id="severityBar"></div>
 
-        <!-- Score & Confidence meters -->
         <div class="meters" id="meters" style="display:none;">
           <div class="meter">
             <div class="meter-label">Severity Score</div>
@@ -297,13 +278,16 @@ def divide(a, b):
         <div class="md" id="predictionText"></div>
         <div class="snapshot-id" id="snapshotId"></div>
 
-        <div class="fix-section" id="fixSection" style="display:none;">
+        <!-- Action buttons -->
+        <div class="action-buttons" id="actionButtons" style="display:none;">
           <button class="fix-btn" id="fixBtn" onclick="fixCode()">✨ Fix with AI</button>
-          <div class="fix-result" id="fixResult" style="display:none;">
-            <div class="fix-explanation" id="fixExplanation"></div>
-            <pre class="fix-code" id="fixCode"></pre>
-            <button class="apply-fix-btn" onclick="applyFix()">⚡ Apply Fix</button>
-          </div>
+          <button class="ignore-btn" id="ignoreBtn" onclick="toggleIgnore()">🚫 Ignore</button>
+        </div>
+
+        <div class="fix-result" id="fixResult" style="display:none;">
+          <div class="fix-explanation" id="fixExplanation"></div>
+          <pre class="fix-code" id="fixCode"></pre>
+          <button class="apply-fix-btn" onclick="applyFix()">⚡ Apply Fix</button>
         </div>
 
         <div class="log-bug-section">
@@ -349,6 +333,7 @@ def divide(a, b):
 
   let currentSnapshotId = null;
   let currentFixedCode = '';
+  let isIgnored = false;
 
   function openDrawer() {
     document.getElementById('historyDrawer').classList.add('open');
@@ -381,7 +366,7 @@ def divide(a, b):
     document.getElementById('codeInput').value = ex.code;
     updateLineNumbers();
     document.getElementById('bugLineHighlight').classList.remove('visible');
-    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
     document.getElementById('fixResult').style.display = 'none';
     document.getElementById('meters').style.display = 'none';
     showToast('Example loaded!');
@@ -462,9 +447,10 @@ def divide(a, b):
     btn.classList.add('loading');
     document.getElementById('bugLineHighlight').classList.remove('visible');
     document.getElementById('memoryNote').classList.remove('visible');
-    document.getElementById('fixSection').style.display = 'none';
+    document.getElementById('actionButtons').style.display = 'none';
     document.getElementById('fixResult').style.display = 'none';
     document.getElementById('meters').style.display = 'none';
+    isIgnored = false;
     updateLineNumbers();
 
     try {
@@ -499,7 +485,6 @@ def divide(a, b):
 
       document.getElementById('severityBar').innerHTML = tags;
 
-      // Show score and confidence meters
       if (!isNone && (data.score > 0 || data.confidence > 0)) {
         const score = data.score || 0;
         const confidence = data.confidence || 0;
@@ -522,7 +507,12 @@ def divide(a, b):
         document.getElementById('memoryNote').classList.add('visible');
       }
 
-      if (!isNone) document.getElementById('fixSection').style.display = 'block';
+      if (!isNone) {
+        document.getElementById('actionButtons').style.display = 'flex';
+        const ignoreBtn = document.getElementById('ignoreBtn');
+        ignoreBtn.textContent = '🚫 Ignore';
+        ignoreBtn.classList.remove('ignored');
+      }
 
       showToast('Analysis complete!');
       loadHistory();
@@ -530,6 +520,35 @@ def divide(a, b):
       showToast('Error connecting to API. Is the server running?', true);
     } finally {
       btn.classList.remove('loading');
+    }
+  }
+
+  async function toggleIgnore() {
+    const code = document.getElementById('codeInput').value.trim();
+    const filename = document.getElementById('filename').value.trim() || 'main.py';
+    const btn = document.getElementById('ignoreBtn');
+
+    const method = isIgnored ? 'DELETE' : 'POST';
+    try {
+      const res = await fetch(`${API}/ignore`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, filename })
+      });
+      if (!res.ok) throw new Error();
+
+      isIgnored = !isIgnored;
+      if (isIgnored) {
+        btn.textContent = '✅ Ignored';
+        btn.classList.add('ignored');
+        showToast('Pattern ignored! Won\'t flag this again 🚫');
+      } else {
+        btn.textContent = '🚫 Ignore';
+        btn.classList.remove('ignored');
+        showToast('Pattern unignored!');
+      }
+    } catch {
+      showToast('Failed to update ignore list', true);
     }
   }
 
@@ -567,7 +586,7 @@ def divide(a, b):
       document.getElementById('codeInput').value = currentFixedCode;
       updateLineNumbers();
       document.getElementById('fixResult').style.display = 'none';
-      document.getElementById('fixSection').style.display = 'none';
+      document.getElementById('actionButtons').style.display = 'none';
       document.getElementById('bugLineHighlight').classList.remove('visible');
       document.getElementById('meters').style.display = 'none';
       showToast('Fix applied! Re-analyze to verify ✅');
