@@ -148,7 +148,6 @@ def analyze_code(input: CodeInput):
         logger.error(f"Database connection failed: {e}")
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    # Check if code is in ignore list
     try:
         code_hash = get_code_hash(input.code)
         cur = conn.cursor()
@@ -156,7 +155,6 @@ def analyze_code(input: CodeInput):
         if cur.fetchone():
             cur.close()
             conn.close()
-            logger.info(f"Code is in ignore list, skipping analysis")
             return {
                 "snapshot_id": "ignored",
                 "prediction": "No obvious bugs detected.",
@@ -189,7 +187,6 @@ def analyze_code(input: CodeInput):
 
         if existing:
             snapshot_id = existing[0]
-            logger.info(f"Duplicate snapshot found, reusing {snapshot_id}")
         else:
             cur.execute("""
                 INSERT INTO code_snapshots (filename, code, embedding)
@@ -287,40 +284,6 @@ MESSAGE: No obvious bugs detected."""
         "ignored": False
     }
 
-@app.post("/ignore")
-def ignore_code(request: IgnoreRequest):
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        code_hash = get_code_hash(request.code)
-        cur.execute("""
-            INSERT INTO ignored_patterns (code_hash, filename)
-            VALUES (%s, %s)
-            ON CONFLICT DO NOTHING;
-        """, (code_hash, request.filename))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"status": "Code pattern ignored successfully"}
-    except Exception as e:
-        logger.error(f"Failed to ignore pattern: {e}")
-        raise HTTPException(status_code=500, detail="Failed to ignore pattern")
-
-@app.delete("/ignore")
-def unignore_code(request: IgnoreRequest):
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        code_hash = get_code_hash(request.code)
-        cur.execute("DELETE FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"status": "Code pattern unignored successfully"}
-    except Exception as e:
-        logger.error(f"Failed to unignore pattern: {e}")
-        raise HTTPException(status_code=500, detail="Failed to unignore pattern")
-
 @app.post("/fix")
 def fix_code(input: CodeInput):
     try:
@@ -357,6 +320,40 @@ EXPLANATION: <one sentence explaining what you fixed>"""
     except Exception as e:
         logger.error(f"Fix failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to fix code")
+
+@app.post("/ignore")
+def ignore_code(request: IgnoreRequest):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        code_hash = get_code_hash(request.code)
+        cur.execute("""
+            INSERT INTO ignored_patterns (code_hash, filename)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING;
+        """, (code_hash, request.filename))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "Code pattern ignored successfully"}
+    except Exception as e:
+        logger.error(f"Failed to ignore pattern: {e}")
+        raise HTTPException(status_code=500, detail="Failed to ignore pattern")
+
+@app.delete("/ignore")
+def unignore_code(request: IgnoreRequest):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        code_hash = get_code_hash(request.code)
+        cur.execute("DELETE FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"status": "Code pattern unignored successfully"}
+    except Exception as e:
+        logger.error(f"Failed to unignore pattern: {e}")
+        raise HTTPException(status_code=500, detail="Failed to unignore pattern")
 
 @app.post("/log-bug")
 def log_bug(bug: BugEvent):
@@ -402,6 +399,81 @@ def bug_history():
     except Exception as e:
         logger.error(f"Failed to fetch history: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch bug history")
+
+@app.get("/stats")
+def get_stats():
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM bug_events;")
+        total_bugs = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM code_snapshots;")
+        total_snapshots = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT cs.filename, COUNT(*) as bug_count
+            FROM bug_events be
+            JOIN code_snapshots cs ON be.snapshot_id = cs.id
+            GROUP BY cs.filename
+            ORDER BY bug_count DESC
+            LIMIT 5;
+        """)
+        bugs_by_file = [{"filename": row[0], "count": row[1]} for row in cur.fetchall()]
+
+        cur.execute("""
+            SELECT
+                COUNT(CASE WHEN LOWER(error_message) LIKE '%critical%' THEN 1 END) as critical,
+                COUNT(CASE WHEN LOWER(error_message) LIKE '%warning%' THEN 1 END) as warning,
+                COUNT(CASE WHEN LOWER(error_message) NOT LIKE '%critical%'
+                      AND LOWER(error_message) NOT LIKE '%warning%' THEN 1 END) as other
+            FROM bug_events;
+        """)
+        row = cur.fetchone()
+        severity_breakdown = {"critical": row[0], "warning": row[1], "other": row[2]}
+
+        cur.execute("""
+            SELECT DATE(created_at) as day, COUNT(*) as count
+            FROM bug_events
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY day
+            ORDER BY day ASC;
+        """)
+        bugs_over_time = [{"day": str(row[0]), "count": row[1]} for row in cur.fetchall()]
+
+        cur.execute("""
+            SELECT
+                CASE
+                    WHEN LOWER(error_message) LIKE '%division%' OR LOWER(error_message) LIKE '%zero%' THEN 'Division by Zero'
+                    WHEN LOWER(error_message) LIKE '%null%' OR LOWER(error_message) LIKE '%none%' THEN 'Null Dereference'
+                    WHEN LOWER(error_message) LIKE '%injection%' OR LOWER(error_message) LIKE '%sql%' THEN 'SQL Injection'
+                    WHEN LOWER(error_message) LIKE '%index%' OR LOWER(error_message) LIKE '%bounds%' THEN 'Index Error'
+                    WHEN LOWER(error_message) LIKE '%loop%' OR LOWER(error_message) LIKE '%infinite%' THEN 'Infinite Loop'
+                    WHEN LOWER(error_message) LIKE '%leak%' THEN 'Resource Leak'
+                    ELSE 'Other'
+                END as bug_type,
+                COUNT(*) as count
+            FROM bug_events
+            GROUP BY bug_type
+            ORDER BY count DESC;
+        """)
+        bug_types = [{"type": row[0], "count": row[1]} for row in cur.fetchall()]
+
+        cur.close()
+        conn.close()
+
+        return {
+            "total_bugs": total_bugs,
+            "total_snapshots": total_snapshots,
+            "bugs_by_file": bugs_by_file,
+            "severity_breakdown": severity_breakdown,
+            "bugs_over_time": bugs_over_time,
+            "bug_types": bug_types
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch stats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch stats")
 
 @app.get("/health")
 def health():
