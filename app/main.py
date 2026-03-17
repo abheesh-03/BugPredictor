@@ -126,12 +126,16 @@ Check for these bug categories:
 
 IMPORTANT: You must respond in this exact format:
 LINE: <line number where the bug is, or 0 if unknown>
-SEVERITY: <Critical or Warning>
+SEVERITY: <Critical or Warning or None>
+SCORE: <severity score from 1-10, where 10 is most severe, 0 if no bug>
+CONFIDENCE: <confidence percentage 0-100 of how sure you are this is a bug>
 MESSAGE: <your concise bug description, max 3 sentences>
 
 If no bugs found respond exactly with:
 LINE: 0
 SEVERITY: None
+SCORE: 0
+CONFIDENCE: 0
 MESSAGE: No obvious bugs detected."""
                 }
             ]
@@ -145,6 +149,8 @@ MESSAGE: No obvious bugs detected."""
 
     bug_line = 0
     severity = "Warning"
+    score = 0
+    confidence = 0
     bug_message = raw
 
     for part in parts:
@@ -155,6 +161,16 @@ MESSAGE: No obvious bugs detected."""
                 bug_line = 0
         elif part.startswith("SEVERITY:"):
             severity = part.split(":", 1)[1].strip()
+        elif part.startswith("SCORE:"):
+            try:
+                score = int(part.split(":", 1)[1].strip())
+            except:
+                score = 0
+        elif part.startswith("CONFIDENCE:"):
+            try:
+                confidence = int(part.split(":", 1)[1].strip())
+            except:
+                confidence = 0
         elif part.startswith("MESSAGE:"):
             bug_message = part.split(":", 1)[1].strip()
 
@@ -162,6 +178,8 @@ MESSAGE: No obvious bugs detected."""
         "snapshot_id": str(snapshot_id),
         "prediction": bug_message,
         "severity": severity,
+        "score": score,
+        "confidence": confidence,
         "bug_line": max(0, bug_line),
         "similar_past_bugs": similar_bugs
     }
