@@ -80,11 +80,24 @@ def analyze_code(input: CodeInput):
 
     try:
         cur = conn.cursor()
+        # Check if identical code already exists (deduplication)
         cur.execute("""
-            INSERT INTO code_snapshots (filename, code, embedding)
-            VALUES (%s, %s, %s::vector) RETURNING id;
-        """, (input.filename, input.code, embedding))
-        snapshot_id = cur.fetchone()[0]
+            SELECT id FROM code_snapshots
+            WHERE code = %s AND filename = %s
+            ORDER BY created_at DESC LIMIT 1;
+        """, (input.code, input.filename))
+        existing = cur.fetchone()
+
+        if existing:
+            snapshot_id = existing[0]
+            logger.info(f"Duplicate snapshot found, reusing {snapshot_id}")
+        else:
+            cur.execute("""
+                INSERT INTO code_snapshots (filename, code, embedding)
+                VALUES (%s, %s, %s::vector) RETURNING id;
+            """, (input.filename, input.code, embedding))
+            snapshot_id = cur.fetchone()[0]
+
         conn.commit()
         cur.close()
         conn.close()
