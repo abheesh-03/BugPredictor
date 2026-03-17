@@ -1,0 +1,106 @@
+name: BugPredictor PR Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed
+        run: |
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | \
+          grep -E '\.(py|js|ts|java|cpp|c)$' | head -10 > changed_files.txt
+          echo "files=$(cat changed_files.txt | tr '\n' ',')" >> $GITHUB_OUTPUT
+
+      - name: Analyze with BugPredictor
+        env:
+          API_URL: https://web-production-cb79b.up.railway.app
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          pip install requests
+
+          python3 << 'PYTHON'
+          import requests, os, json
+
+          api_url = os.environ['API_URL']
+          gh_token = os.environ['GH_TOKEN']
+          pr_number = os.environ['PR_NUMBER']
+          repo = os.environ['REPO']
+
+          headers = {
+              'Authorization': f'token {gh_token}',
+              'Accept': 'application/vnd.github.v3+json'
+          }
+
+          # Read changed files
+          try:
+              with open('changed_files.txt') as f:
+                  files = [f.strip() for f in f.readlines() if f.strip()]
+          except:
+              files = []
+
+          if not files:
+              print("No supported files changed")
+              exit(0)
+
+          bugs_found = []
+
+          for filepath in files[:5]:  # max 5 files
+              try:
+                  with open(filepath, 'r') as f:
+                      code = f.read()
+                  if len(code.strip()) < 20:
+                      continue
+
+                  res = requests.post(f'{api_url}/analyze', json={
+                      'filename': filepath.split('/')[-1],
+                      'code': code[:3000]
+                  }, timeout=30)
+
+                  if res.status_code == 200:
+                      data = res.json()
+                      if data['severity'] not in ['None', None]:
+                          bugs_found.append({
+                              'file': filepath,
+                              'line': data['bug_line'] + 1,
+                              'severity': data['severity'],
+                              'score': data.get('score', 0),
+                              'confidence': data.get('confidence', 0),
+                              'message': data['prediction']
+                          })
+              except Exception as e:
+                  print(f"Error analyzing {filepath}: {e}")
+
+          # Post comment to PR
+          if bugs_found:
+              comment = "## 🐛 BugPredictor Analysis\n\n"
+              comment += f"Found **{len(bugs_found)} potential bug(s)** in this PR:\n\n"
+              for bug in bugs_found:
+                  emoji = "🔴" if bug['severity'] == 'Critical' else "🟡"
+                  comment += f"---\n"
+                  comment += f"{emoji} **{bug['file']}** — Line {bug['line']}\n"
+                  comment += f"**Severity:** {bug['severity']} ({bug['score']}/10) | **Confidence:** {bug['confidence']}%\n\n"
+                  comment += f"> {bug['message']}\n\n"
+              comment += "\n---\n*Powered by [BugPredictor](https://abheesh-03.github.io/BugPredictor/) 🤖*"
+          else:
+              comment = "## 🐛 BugPredictor Analysis\n\n✅ **No bugs detected** in changed files!\n\n---\n*Powered by [BugPredictor](https://abheesh-03.github.io/BugPredictor/) 🤖*"
+
+          # Post to GitHub
+          url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'
+          res = requests.post(url, headers=headers, json={'body': comment})
+          print(f"Comment posted: {res.status_code}")
+          PYTHON
