@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, validator
 from app.db import get_connection, init_db
 from app.embeddings import get_embedding, find_similar_bugs
@@ -28,6 +28,7 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 class CodeInput(BaseModel):
     filename: str
     code: str
+    team_id: str = None
 
     @validator('code')
     def code_must_not_be_empty(cls, v):
@@ -59,71 +60,57 @@ class IgnoreRequest(BaseModel):
     code: str
     filename: str
 
+class TeamCreate(BaseModel):
+    name: str
+
+class TeamJoin(BaseModel):
+    invite_code: str
+    user_identifier: str
+
 def get_code_hash(code: str) -> str:
     return hashlib.md5(code.strip().encode()).hexdigest()
 
 def get_language_rules(filename: str) -> str:
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
-
     rules = {
         'py': """Language: Python. Focus on:
 - None/null dereference (AttributeError, TypeError)
 - Mutable default arguments (def f(x=[]))
 - Integer division vs float division
 - Missing exception handling for IO/network ops
-- Indentation errors causing wrong logic
 - Using == instead of 'is' for None checks
 - Division by zero in calculations""",
-
         'js': """Language: JavaScript. Focus on:
 - undefined/null reference errors
 - == vs === comparison bugs
 - Async/await missing try-catch
-- Callback hell and promise rejections
 - var hoisting issues
-- Missing return statements in arrow functions
-- Array mutation side effects""",
-
+- Missing return statements in arrow functions""",
         'ts': """Language: TypeScript. Focus on:
 - Type assertion errors (as any overuse)
 - Optional chaining missing (?.)
 - Null/undefined not handled in strict mode
-- Generic type mismatches
-- Interface implementation errors
-- Async function return type mismatches""",
-
+- Generic type mismatches""",
         'java': """Language: Java. Focus on:
 - NullPointerException risks
 - Unchecked type casting
 - Resource leaks (streams, connections not closed)
-- Integer overflow
-- String comparison with == instead of .equals()
-- Missing null checks before method calls""",
-
+- String comparison with == instead of .equals()""",
         'cpp': """Language: C++. Focus on:
 - Memory leaks (new without delete)
 - Buffer overflow risks
 - Dangling pointers
-- Use after free
-- Integer overflow/underflow
 - Uninitialized variables""",
-
         'c': """Language: C. Focus on:
 - Buffer overflow (strcpy, gets)
 - Memory leaks
 - Null pointer dereference
-- Format string vulnerabilities
-- Integer overflow
-- Use after free""",
-
+- Format string vulnerabilities""",
         'sql': """Language: SQL. Focus on:
 - SQL injection vulnerabilities
 - Missing WHERE clause in UPDATE/DELETE
-- N+1 query problems
-- Missing indexes on JOIN columns
 - NULL handling in comparisons"""
     }
-
     return rules.get(ext, """Focus on common bugs:
 - Null/None dereference
 - Division by zero
@@ -139,6 +126,101 @@ def startup():
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
+
+@app.post("/team/create")
+def create_team(team: TeamCreate):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO teams (name)
+            VALUES (%s)
+            RETURNING id, invite_code, name;
+        """, (team.name,))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {
+            "team_id": str(row[0]),
+            "invite_code": row[1],
+            "name": row[2],
+            "message": f"Team '{row[2]}' created! Share invite code: {row[1]}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to create team: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create team")
+
+@app.post("/team/join")
+def join_team(data: TeamJoin):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM teams WHERE invite_code = %s", (data.invite_code,))
+        team = cur.fetchone()
+        if not team:
+            raise HTTPException(status_code=404, detail="Invalid invite code")
+
+        cur.execute("""
+            INSERT INTO team_members (team_id, user_identifier)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING;
+        """, (team[0], data.user_identifier))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {
+            "team_id": str(team[0]),
+            "team_name": team[1],
+            "message": f"Joined team '{team[1]}' successfully!"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to join team: {e}")
+        raise HTTPException(status_code=500, detail="Failed to join team")
+
+@app.get("/team/{team_id}/stats")
+def team_stats(team_id: str):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT name, invite_code FROM teams WHERE id = %s", (team_id,))
+        team = cur.fetchone()
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+
+        cur.execute("""
+            SELECT COUNT(*) FROM bug_events be
+            JOIN code_snapshots cs ON be.snapshot_id = cs.id
+            WHERE cs.team_id = %s
+        """, (team_id,))
+        total_bugs = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT cs.filename, COUNT(*) as count
+            FROM bug_events be
+            JOIN code_snapshots cs ON be.snapshot_id = cs.id
+            WHERE cs.team_id = %s
+            GROUP BY cs.filename
+            ORDER BY count DESC LIMIT 5
+        """, (team_id,))
+        bugs_by_file = [{"filename": r[0], "count": r[1]} for r in cur.fetchall()]
+
+        cur.close()
+        conn.close()
+        return {
+            "team_name": team[0],
+            "invite_code": team[1],
+            "total_bugs": total_bugs,
+            "bugs_by_file": bugs_by_file
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get team stats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get team stats")
 
 @app.post("/analyze")
 def analyze_code(input: CodeInput):
@@ -171,7 +253,7 @@ def analyze_code(input: CodeInput):
 
     try:
         embedding = get_embedding(input.code)
-        similar_bugs = find_similar_bugs(embedding, conn)
+        similar_bugs = find_similar_bugs(embedding, conn, team_id=input.team_id)
     except Exception as e:
         logger.error(f"Embedding/search failed: {e}")
         similar_bugs = []
@@ -189,9 +271,9 @@ def analyze_code(input: CodeInput):
             snapshot_id = existing[0]
         else:
             cur.execute("""
-                INSERT INTO code_snapshots (filename, code, embedding)
-                VALUES (%s, %s, %s::vector) RETURNING id;
-            """, (input.filename, input.code, embedding))
+                INSERT INTO code_snapshots (filename, code, embedding, team_id)
+                VALUES (%s, %s, %s::vector, %s) RETURNING id;
+            """, (input.filename, input.code, embedding, input.team_id))
             snapshot_id = cur.fetchone()[0]
 
         conn.commit()
