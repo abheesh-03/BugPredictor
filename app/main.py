@@ -54,6 +54,75 @@ class BugEvent(BaseModel):
             raise ValueError('Error message cannot be empty')
         return v
 
+def get_language_rules(filename: str) -> str:
+    ext = filename.split('.')[-1].lower() if '.' in filename else ''
+
+    rules = {
+        'py': """Language: Python. Focus on:
+- None/null dereference (AttributeError, TypeError)
+- Mutable default arguments (def f(x=[]))
+- Integer division vs float division
+- Missing exception handling for IO/network ops
+- Indentation errors causing wrong logic
+- Using == instead of 'is' for None checks
+- Division by zero in calculations""",
+
+        'js': """Language: JavaScript. Focus on:
+- undefined/null reference errors
+- == vs === comparison bugs
+- Async/await missing try-catch
+- Callback hell and promise rejections
+- var hoisting issues
+- Missing return statements in arrow functions
+- Array mutation side effects""",
+
+        'ts': """Language: TypeScript. Focus on:
+- Type assertion errors (as any overuse)
+- Optional chaining missing (?.)
+- Null/undefined not handled in strict mode
+- Generic type mismatches
+- Interface implementation errors
+- Async function return type mismatches""",
+
+        'java': """Language: Java. Focus on:
+- NullPointerException risks
+- Unchecked type casting
+- Resource leaks (streams, connections not closed)
+- Integer overflow
+- String comparison with == instead of .equals()
+- Missing null checks before method calls""",
+
+        'cpp': """Language: C++. Focus on:
+- Memory leaks (new without delete)
+- Buffer overflow risks
+- Dangling pointers
+- Use after free
+- Integer overflow/underflow
+- Uninitialized variables""",
+
+        'c': """Language: C. Focus on:
+- Buffer overflow (strcpy, gets)
+- Memory leaks
+- Null pointer dereference
+- Format string vulnerabilities
+- Integer overflow
+- Use after free""",
+
+        'sql': """Language: SQL. Focus on:
+- SQL injection vulnerabilities
+- Missing WHERE clause in UPDATE/DELETE
+- N+1 query problems
+- Missing indexes on JOIN columns
+- NULL handling in comparisons"""
+    }
+
+    return rules.get(ext, """Focus on common bugs:
+- Null/None dereference
+- Division by zero
+- Off-by-one errors
+- Resource leaks
+- Injection vulnerabilities""")
+
 @app.on_event("startup")
 def startup():
     try:
@@ -80,7 +149,6 @@ def analyze_code(input: CodeInput):
 
     try:
         cur = conn.cursor()
-        # Check if identical code already exists (deduplication)
         cur.execute("""
             SELECT id FROM code_snapshots
             WHERE code = %s AND filename = %s
@@ -125,17 +193,7 @@ Code from {input.filename}:
 {input.code}
 {memory_context}
 
-Check for these bug categories:
-1. Division by zero
-2. Null/None dereference
-3. Off-by-one errors
-4. Type mismatches
-5. Resource leaks
-6. Infinite loops
-7. Logic errors
-8. Unhandled exceptions
-9. Race conditions
-10. SQL/command injection
+{get_language_rules(input.filename)}
 
 IMPORTANT: You must respond in this exact format:
 LINE: <line number where the bug is, or 0 if unknown>
