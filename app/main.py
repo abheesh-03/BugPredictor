@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, validator
 from app.db import get_connection, init_db
 from app.embeddings import get_embedding, find_similar_bugs
 import anthropic
 import os
 import hashlib
+import jwt
 from dotenv import load_dotenv
 import logging
 
@@ -24,6 +26,26 @@ app.add_middleware(
 )
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+security = HTTPBearer(auto_error=False)
+
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+SUPABASE_URL = "https://fkdsphqncnckyyxyqcuf.supabase.co"
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            options={"verify_aud": False}
+        )
+        return payload.get("sub")
+    except Exception as e:
+        logger.error(f"JWT decode failed: {e}")
+        return None
 
 class CodeInput(BaseModel):
     filename: str
@@ -128,7 +150,7 @@ def startup():
         raise
 
 @app.post("/team/create")
-def create_team(team: TeamCreate):
+def create_team(team: TeamCreate, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
@@ -152,7 +174,7 @@ def create_team(team: TeamCreate):
         raise HTTPException(status_code=500, detail="Failed to create team")
 
 @app.post("/team/join")
-def join_team(data: TeamJoin):
+def join_team(data: TeamJoin, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
@@ -160,7 +182,6 @@ def join_team(data: TeamJoin):
         team = cur.fetchone()
         if not team:
             raise HTTPException(status_code=404, detail="Invalid invite code")
-
         cur.execute("""
             INSERT INTO team_members (team_id, user_identifier)
             VALUES (%s, %s)
@@ -181,23 +202,14 @@ def join_team(data: TeamJoin):
         raise HTTPException(status_code=500, detail="Failed to join team")
 
 @app.get("/team/{team_id}/stats")
-def team_stats(team_id: str):
+def team_stats(team_id: str, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
-
         cur.execute("SELECT name, invite_code FROM teams WHERE id = %s", (team_id,))
         team = cur.fetchone()
         if not team:
             raise HTTPException(status_code=404, detail="Team not found")
-
-        cur.execute("""
-            SELECT COUNT(*) FROM bug_events be
-            JOIN code_snapshots cs ON be.snapshot_id = cs.id
-            WHERE cs.team_id = %s
-        """, (team_id,))
-        total_bugs = cur.fetchone()[0]
-
         cur.execute("""
             SELECT cs.filename, COUNT(*) as count
             FROM bug_events be
@@ -207,13 +219,11 @@ def team_stats(team_id: str):
             ORDER BY count DESC LIMIT 5
         """, (team_id,))
         bugs_by_file = [{"filename": r[0], "count": r[1]} for r in cur.fetchall()]
-
         cur.close()
         conn.close()
         return {
             "team_name": team[0],
             "invite_code": team[1],
-            "total_bugs": total_bugs,
             "bugs_by_file": bugs_by_file
         }
     except HTTPException:
@@ -223,7 +233,7 @@ def team_stats(team_id: str):
         raise HTTPException(status_code=500, detail="Failed to get team stats")
 
 @app.post("/analyze")
-def analyze_code(input: CodeInput):
+def analyze_code(input: CodeInput, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
     except Exception as e:
@@ -233,7 +243,8 @@ def analyze_code(input: CodeInput):
     try:
         code_hash = get_code_hash(input.code)
         cur = conn.cursor()
-        cur.execute("SELECT id FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
+        cur.execute("SELECT id FROM ignored_patterns WHERE code_hash = %s AND (user_id = %s OR user_id IS NULL)",
+                   (code_hash, user_id))
         if cur.fetchone():
             cur.close()
             conn.close()
@@ -253,7 +264,7 @@ def analyze_code(input: CodeInput):
 
     try:
         embedding = get_embedding(input.code)
-        similar_bugs = find_similar_bugs(embedding, conn, team_id=input.team_id)
+        similar_bugs = find_similar_bugs(embedding, conn, team_id=input.team_id, user_id=user_id)
     except Exception as e:
         logger.error(f"Embedding/search failed: {e}")
         similar_bugs = []
@@ -262,18 +273,18 @@ def analyze_code(input: CodeInput):
         cur = conn.cursor()
         cur.execute("""
             SELECT id FROM code_snapshots
-            WHERE code = %s AND filename = %s
+            WHERE code = %s AND filename = %s AND (user_id = %s OR user_id IS NULL)
             ORDER BY created_at DESC LIMIT 1;
-        """, (input.code, input.filename))
+        """, (input.code, input.filename, user_id))
         existing = cur.fetchone()
 
         if existing:
             snapshot_id = existing[0]
         else:
             cur.execute("""
-                INSERT INTO code_snapshots (filename, code, embedding, team_id)
-                VALUES (%s, %s, %s::vector, %s) RETURNING id;
-            """, (input.filename, input.code, embedding, input.team_id))
+                INSERT INTO code_snapshots (filename, code, embedding, team_id, user_id)
+                VALUES (%s, %s, %s::vector, %s, %s) RETURNING id;
+            """, (input.filename, input.code, embedding, input.team_id, user_id))
             snapshot_id = cur.fetchone()[0]
 
         conn.commit()
@@ -294,10 +305,9 @@ def analyze_code(input: CodeInput):
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""You are an expert bug prediction AI embedded in a VS Code extension. Analyze the code and predict potential bugs.
+            messages=[{
+                "role": "user",
+                "content": f"""You are an expert bug prediction AI embedded in a VS Code extension. Analyze the code and predict potential bugs.
 
 Code from {input.filename}:
 {input.code}
@@ -318,8 +328,7 @@ SEVERITY: None
 SCORE: 0
 CONFIDENCE: 0
 MESSAGE: No obvious bugs detected."""
-                }
-            ]
+            }]
         )
     except Exception as e:
         logger.error(f"Claude API failed: {e}")
@@ -367,15 +376,14 @@ MESSAGE: No obvious bugs detected."""
     }
 
 @app.post("/fix")
-def fix_code(input: CodeInput):
+def fix_code(input: CodeInput, user_id: str = Depends(get_current_user)):
     try:
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=2048,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""You are an expert code fixer. Fix the bugs in this code.
+            messages=[{
+                "role": "user",
+                "content": f"""You are an expert code fixer. Fix the bugs in this code.
 
 Code from {input.filename}:
 {input.code}
@@ -383,37 +391,30 @@ Code from {input.filename}:
 IMPORTANT: You must respond in this exact format:
 FIXED_CODE: <the complete fixed code with no markdown, no backticks, just raw code>
 EXPLANATION: <one sentence explaining what you fixed>"""
-                }
-            ]
+            }]
         )
-
         raw = message.content[0].text.strip()
         fixed_code = ""
         explanation = ""
-
         if "FIXED_CODE:" in raw and "EXPLANATION:" in raw:
             fixed_code = raw.split("FIXED_CODE:", 1)[1].split("EXPLANATION:")[0].strip()
             explanation = raw.split("EXPLANATION:", 1)[1].strip()
-
-        return {
-            "fixed_code": fixed_code,
-            "explanation": explanation
-        }
+        return {"fixed_code": fixed_code, "explanation": explanation}
     except Exception as e:
         logger.error(f"Fix failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to fix code")
 
 @app.post("/ignore")
-def ignore_code(request: IgnoreRequest):
+def ignore_code(request: IgnoreRequest, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
         code_hash = get_code_hash(request.code)
         cur.execute("""
-            INSERT INTO ignored_patterns (code_hash, filename)
-            VALUES (%s, %s)
+            INSERT INTO ignored_patterns (code_hash, filename, user_id)
+            VALUES (%s, %s, %s)
             ON CONFLICT DO NOTHING;
-        """, (code_hash, request.filename))
+        """, (code_hash, request.filename, user_id))
         conn.commit()
         cur.close()
         conn.close()
@@ -423,12 +424,13 @@ def ignore_code(request: IgnoreRequest):
         raise HTTPException(status_code=500, detail="Failed to ignore pattern")
 
 @app.delete("/ignore")
-def unignore_code(request: IgnoreRequest):
+def unignore_code(request: IgnoreRequest, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
         code_hash = get_code_hash(request.code)
-        cur.execute("DELETE FROM ignored_patterns WHERE code_hash = %s", (code_hash,))
+        cur.execute("DELETE FROM ignored_patterns WHERE code_hash = %s AND user_id = %s",
+                   (code_hash, user_id))
         conn.commit()
         cur.close()
         conn.close()
@@ -438,14 +440,14 @@ def unignore_code(request: IgnoreRequest):
         raise HTTPException(status_code=500, detail="Failed to unignore pattern")
 
 @app.post("/log-bug")
-def log_bug(bug: BugEvent):
+def log_bug(bug: BugEvent, user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO bug_events (snapshot_id, error_message)
-            VALUES (%s, %s);
-        """, (bug.snapshot_id, bug.error_message))
+            INSERT INTO bug_events (snapshot_id, error_message, user_id)
+            VALUES (%s, %s, %s);
+        """, (bug.snapshot_id, bug.error_message, user_id))
         conn.commit()
         cur.close()
         conn.close()
@@ -455,17 +457,27 @@ def log_bug(bug: BugEvent):
         raise HTTPException(status_code=500, detail="Failed to log bug")
 
 @app.get("/bug-history")
-def bug_history():
+def bug_history(user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
-        cur.execute("""
-            SELECT cs.filename, cs.code, be.error_message, be.created_at
-            FROM bug_events be
-            JOIN code_snapshots cs ON be.snapshot_id = cs.id
-            ORDER BY be.created_at DESC
-            LIMIT 20;
-        """)
+        if user_id:
+            cur.execute("""
+                SELECT cs.filename, cs.code, be.error_message, be.created_at
+                FROM bug_events be
+                JOIN code_snapshots cs ON be.snapshot_id = cs.id
+                WHERE be.user_id = %s
+                ORDER BY be.created_at DESC
+                LIMIT 20;
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT cs.filename, cs.code, be.error_message, be.created_at
+                FROM bug_events be
+                JOIN code_snapshots cs ON be.snapshot_id = cs.id
+                ORDER BY be.created_at DESC
+                LIMIT 20;
+            """)
         rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -483,63 +495,111 @@ def bug_history():
         raise HTTPException(status_code=500, detail="Failed to fetch bug history")
 
 @app.get("/stats")
-def get_stats():
+def get_stats(user_id: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT COUNT(*) FROM bug_events;")
+        if user_id:
+            cur.execute("SELECT COUNT(*) FROM bug_events WHERE user_id = %s;", (user_id,))
+        else:
+            cur.execute("SELECT COUNT(*) FROM bug_events;")
         total_bugs = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(*) FROM code_snapshots;")
+        if user_id:
+            cur.execute("SELECT COUNT(*) FROM code_snapshots WHERE user_id = %s;", (user_id,))
+        else:
+            cur.execute("SELECT COUNT(*) FROM code_snapshots;")
         total_snapshots = cur.fetchone()[0]
 
-        cur.execute("""
-            SELECT cs.filename, COUNT(*) as bug_count
-            FROM bug_events be
-            JOIN code_snapshots cs ON be.snapshot_id = cs.id
-            GROUP BY cs.filename
-            ORDER BY bug_count DESC
-            LIMIT 5;
-        """)
+        if user_id:
+            cur.execute("""
+                SELECT cs.filename, COUNT(*) as bug_count
+                FROM bug_events be
+                JOIN code_snapshots cs ON be.snapshot_id = cs.id
+                WHERE be.user_id = %s
+                GROUP BY cs.filename
+                ORDER BY bug_count DESC LIMIT 5;
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT cs.filename, COUNT(*) as bug_count
+                FROM bug_events be
+                JOIN code_snapshots cs ON be.snapshot_id = cs.id
+                GROUP BY cs.filename
+                ORDER BY bug_count DESC LIMIT 5;
+            """)
         bugs_by_file = [{"filename": row[0], "count": row[1]} for row in cur.fetchall()]
 
-        cur.execute("""
-            SELECT
-                COUNT(CASE WHEN LOWER(error_message) LIKE '%critical%' THEN 1 END) as critical,
-                COUNT(CASE WHEN LOWER(error_message) LIKE '%warning%' THEN 1 END) as warning,
-                COUNT(CASE WHEN LOWER(error_message) NOT LIKE '%critical%'
-                      AND LOWER(error_message) NOT LIKE '%warning%' THEN 1 END) as other
-            FROM bug_events;
-        """)
+        if user_id:
+            cur.execute("""
+                SELECT
+                    COUNT(CASE WHEN LOWER(error_message) LIKE '%critical%' THEN 1 END) as critical,
+                    COUNT(CASE WHEN LOWER(error_message) LIKE '%warning%' THEN 1 END) as warning,
+                    COUNT(CASE WHEN LOWER(error_message) NOT LIKE '%critical%'
+                          AND LOWER(error_message) NOT LIKE '%warning%' THEN 1 END) as other
+                FROM bug_events WHERE user_id = %s;
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT
+                    COUNT(CASE WHEN LOWER(error_message) LIKE '%critical%' THEN 1 END) as critical,
+                    COUNT(CASE WHEN LOWER(error_message) LIKE '%warning%' THEN 1 END) as warning,
+                    COUNT(CASE WHEN LOWER(error_message) NOT LIKE '%critical%'
+                          AND LOWER(error_message) NOT LIKE '%warning%' THEN 1 END) as other
+                FROM bug_events;
+            """)
         row = cur.fetchone()
         severity_breakdown = {"critical": row[0], "warning": row[1], "other": row[2]}
 
-        cur.execute("""
-            SELECT DATE(created_at) as day, COUNT(*) as count
-            FROM bug_events
-            WHERE created_at >= NOW() - INTERVAL '7 days'
-            GROUP BY day
-            ORDER BY day ASC;
-        """)
+        if user_id:
+            cur.execute("""
+                SELECT DATE(created_at) as day, COUNT(*) as count
+                FROM bug_events
+                WHERE created_at >= NOW() - INTERVAL '7 days' AND user_id = %s
+                GROUP BY day ORDER BY day ASC;
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT DATE(created_at) as day, COUNT(*) as count
+                FROM bug_events
+                WHERE created_at >= NOW() - INTERVAL '7 days'
+                GROUP BY day ORDER BY day ASC;
+            """)
         bugs_over_time = [{"day": str(row[0]), "count": row[1]} for row in cur.fetchall()]
 
-        cur.execute("""
-            SELECT
-                CASE
-                    WHEN LOWER(error_message) LIKE '%division%' OR LOWER(error_message) LIKE '%zero%' THEN 'Division by Zero'
-                    WHEN LOWER(error_message) LIKE '%null%' OR LOWER(error_message) LIKE '%none%' THEN 'Null Dereference'
-                    WHEN LOWER(error_message) LIKE '%injection%' OR LOWER(error_message) LIKE '%sql%' THEN 'SQL Injection'
-                    WHEN LOWER(error_message) LIKE '%index%' OR LOWER(error_message) LIKE '%bounds%' THEN 'Index Error'
-                    WHEN LOWER(error_message) LIKE '%loop%' OR LOWER(error_message) LIKE '%infinite%' THEN 'Infinite Loop'
-                    WHEN LOWER(error_message) LIKE '%leak%' THEN 'Resource Leak'
-                    ELSE 'Other'
-                END as bug_type,
-                COUNT(*) as count
-            FROM bug_events
-            GROUP BY bug_type
-            ORDER BY count DESC;
-        """)
+        if user_id:
+            cur.execute("""
+                SELECT
+                    CASE
+                        WHEN LOWER(error_message) LIKE '%division%' OR LOWER(error_message) LIKE '%zero%' THEN 'Division by Zero'
+                        WHEN LOWER(error_message) LIKE '%null%' OR LOWER(error_message) LIKE '%none%' THEN 'Null Dereference'
+                        WHEN LOWER(error_message) LIKE '%injection%' OR LOWER(error_message) LIKE '%sql%' THEN 'SQL Injection'
+                        WHEN LOWER(error_message) LIKE '%index%' OR LOWER(error_message) LIKE '%bounds%' THEN 'Index Error'
+                        WHEN LOWER(error_message) LIKE '%loop%' OR LOWER(error_message) LIKE '%infinite%' THEN 'Infinite Loop'
+                        WHEN LOWER(error_message) LIKE '%leak%' THEN 'Resource Leak'
+                        ELSE 'Other'
+                    END as bug_type,
+                    COUNT(*) as count
+                FROM bug_events WHERE user_id = %s
+                GROUP BY bug_type ORDER BY count DESC;
+            """, (user_id,))
+        else:
+            cur.execute("""
+                SELECT
+                    CASE
+                        WHEN LOWER(error_message) LIKE '%division%' OR LOWER(error_message) LIKE '%zero%' THEN 'Division by Zero'
+                        WHEN LOWER(error_message) LIKE '%null%' OR LOWER(error_message) LIKE '%none%' THEN 'Null Dereference'
+                        WHEN LOWER(error_message) LIKE '%injection%' OR LOWER(error_message) LIKE '%sql%' THEN 'SQL Injection'
+                        WHEN LOWER(error_message) LIKE '%index%' OR LOWER(error_message) LIKE '%bounds%' THEN 'Index Error'
+                        WHEN LOWER(error_message) LIKE '%loop%' OR LOWER(error_message) LIKE '%infinite%' THEN 'Infinite Loop'
+                        WHEN LOWER(error_message) LIKE '%leak%' THEN 'Resource Leak'
+                        ELSE 'Other'
+                    END as bug_type,
+                    COUNT(*) as count
+                FROM bug_events
+                GROUP BY bug_type ORDER BY count DESC;
+            """)
         bug_types = [{"type": row[0], "count": row[1]} for row in cur.fetchall()]
 
         cur.close()
@@ -565,3 +625,8 @@ def health():
         return {"status": "bugpredictor is alive 🚀", "database": "connected"}
     except Exception as e:
         return {"status": "bugpredictor is alive 🚀", "database": "disconnected", "error": str(e)}
+```
+
+Now we need to add `SUPABASE_JWT_SECRET` to Railway. Go to **railway.app** → **Variables** tab and add:
+```
+SUPABASE_JWT_SECRET=your-jwt-secret
