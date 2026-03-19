@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BugPredictor — AI Code Analysis</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #0a0a0f;
@@ -51,6 +52,31 @@
   .status-badge { display: flex; align-items: center; gap: 8px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--success); background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); padding: 6px 14px; border-radius: 100px; }
   .status-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: blink 2s ease-in-out infinite; }
   @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Auth Modal */
+  .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+  .auth-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 40px; width: 100%; max-width: 420px; position: relative; z-index: 201; animation: fadeUp 0.3s ease; }
+  .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center; }
+  .auth-logo-icon { width: 48px; height: 48px; background: var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .auth-logo-text { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+  .auth-logo-text span { color: var(--accent); }
+  .auth-tabs { display: flex; gap: 4px; background: var(--code-bg); border-radius: 10px; padding: 4px; margin-bottom: 24px; }
+  .auth-tab { flex: 1; padding: 8px; text-align: center; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); cursor: pointer; border-radius: 7px; transition: all 0.2s; border: none; background: transparent; }
+  .auth-tab.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .auth-input { width: 100%; background: var(--code-bg); border: 1px solid var(--border); color: var(--text); font-family: 'Space Mono', monospace; font-size: 13px; padding: 12px 16px; border-radius: 10px; outline: none; margin-bottom: 12px; transition: border-color 0.2s; }
+  .auth-input:focus { border-color: var(--accent); }
+  .auth-btn { width: 100%; padding: 14px; background: var(--accent); color: white; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+  .auth-btn:hover { background: #ff1a3f; transform: translateY(-1px); }
+  .auth-btn.loading { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+  .auth-error { color: var(--accent); font-family: 'Space Mono', monospace; font-size: 11px; margin-top: 10px; text-align: center; min-height: 16px; }
+  .auth-success { color: var(--success); font-family: 'Space Mono', monospace; font-size: 11px; margin-top: 10px; text-align: center; min-height: 16px; }
+  .auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .auth-divider span { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  /* User badge */
+  .user-badge { display: flex; align-items: center; gap: 8px; background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); color: var(--success); font-family: 'Space Mono', monospace; font-size: 11px; padding: 6px 12px; border-radius: 100px; cursor: pointer; transition: all 0.2s; }
+  .user-badge:hover { background: rgba(255,60,95,0.08); border-color: var(--accent); color: var(--accent); }
 
   .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
   .drawer-overlay.open { opacity: 1; pointer-events: all; }
@@ -230,11 +256,38 @@
   .team-result { margin-top: 12px; padding: 12px; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.2); border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--success); display: none; }
   .team-result.visible { display: block; }
   .invite-code { font-size: 20px; font-weight: 700; letter-spacing: 4px; color: var(--success); margin: 8px 0; }
-  .active-team-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); color: var(--success); font-family: 'Space Mono', monospace; font-size: 10px; padding: 4px 10px; border-radius: 100px; margin-bottom: 12px; }
+  .active-team-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); color: var(--success); font-family: 'Space Mono', monospace; font-size: 10px; padding: 4px 10px; border-radius: 100px; }
 </style>
 </head>
 <body>
 <div class="noise"></div>
+
+<!-- Auth Modal -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-modal">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🐛</div>
+      <div class="auth-logo-text">Bug<span>Predictor</span></div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTab" onclick="switchTab('login')">Login</button>
+      <button class="auth-tab" id="signupTab" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+    <div id="loginForm">
+      <input class="auth-input" id="loginEmail" type="email" placeholder="Email address">
+      <input class="auth-input" id="loginPassword" type="password" placeholder="Password">
+      <button class="auth-btn" id="loginBtn" onclick="login()">⚡ Login</button>
+      <div class="auth-error" id="loginError"></div>
+    </div>
+    <div id="signupForm" style="display:none;">
+      <input class="auth-input" id="signupEmail" type="email" placeholder="Email address">
+      <input class="auth-input" id="signupPassword" type="password" placeholder="Password (min 6 chars)">
+      <button class="auth-btn" id="signupBtn" onclick="signup()">🚀 Create Account</button>
+      <div class="auth-error" id="signupError"></div>
+      <div class="auth-success" id="signupSuccess"></div>
+    </div>
+  </div>
+</div>
 
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="historyDrawer">
@@ -258,6 +311,9 @@
       <div class="header-right">
         <div id="activeTeamBadge" style="display:none;" class="active-team-badge">👥 <span id="activeTeamName"></span></div>
         <button class="history-btn" onclick="openDrawer()">🐛 History <span class="bug-count-badge" id="bugCount">0</span></button>
+        <div class="user-badge" id="userBadge" onclick="logout()" title="Click to logout">
+          <span>👤</span><span id="userEmail">...</span><span style="opacity:0.5">✕</span>
+        </div>
         <div class="status-badge"><div class="status-dot"></div>API LIVE</div>
       </div>
     </div>
@@ -404,8 +460,107 @@
 
 <script>
   const API = 'https://web-production-cb79b.up.railway.app';
+  const SUPABASE_URL = 'https://fkdsphqncnckyyxyqcuf.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrZHNwaHFuY25ja3l5eHlxY3VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDcwMjcsImV4cCI6MjA4OTAyMzAyN30.av30LNmwu5prqN2YWASAtmUOQMyD5KDQ1E5tarIvNUY';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   let currentTeamId = null;
   let currentTeamName = null;
+  let currentSnapshotId = null;
+  let currentFixedCode = '';
+  let isIgnored = false;
+  let authToken = null;
+
+  // Auth functions
+  function switchTab(tab) {
+    document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+    document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
+    document.getElementById('loginTab').classList.toggle('active', tab === 'login');
+    document.getElementById('signupTab').classList.toggle('active', tab === 'signup');
+  }
+
+  async function login() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.getElementById('loginBtn');
+    const error = document.getElementById('loginError');
+    if (!email || !password) { error.textContent = 'Please fill in all fields'; return; }
+    btn.classList.add('loading');
+    btn.textContent = 'Logging in...';
+    error.textContent = '';
+    try {
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) throw err;
+      authToken = data.session.access_token;
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('userEmail').textContent = email.split('@')[0];
+      showToast(`Welcome back! 🎉`);
+      loadHistory();
+      loadStats();
+    } catch(err) {
+      error.textContent = err.message || 'Login failed';
+    } finally {
+      btn.classList.remove('loading');
+      btn.textContent = '⚡ Login';
+    }
+  }
+
+  async function signup() {
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const btn = document.getElementById('signupBtn');
+    const error = document.getElementById('signupError');
+    const success = document.getElementById('signupSuccess');
+    if (!email || !password) { error.textContent = 'Please fill in all fields'; return; }
+    if (password.length < 6) { error.textContent = 'Password must be at least 6 characters'; return; }
+    btn.classList.add('loading');
+    btn.textContent = 'Creating account...';
+    error.textContent = '';
+    success.textContent = '';
+    try {
+      const { data, error: err } = await supabase.auth.signUp({ email, password });
+      if (err) throw err;
+      if (data.session) {
+        authToken = data.session.access_token;
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('userEmail').textContent = email.split('@')[0];
+        showToast('Account created! Welcome! 🎉');
+        loadHistory();
+        loadStats();
+      } else {
+        success.textContent = '✅ Check your email to confirm your account!';
+      }
+    } catch(err) {
+      error.textContent = err.message || 'Signup failed';
+    } finally {
+      btn.classList.remove('loading');
+      btn.textContent = '🚀 Create Account';
+    }
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    authToken = null;
+    document.getElementById('authOverlay').style.display = 'flex';
+    showToast('Logged out!');
+  }
+
+  function getAuthHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return headers;
+  }
+
+  // Check existing session on load
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      authToken = session.access_token;
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('userEmail').textContent = session.user.email.split('@')[0];
+      loadHistory();
+      loadStats();
+    }
+  });
 
   const examples = {
     divide: { filename: 'math_utils.py', code: `def divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\nprint(result)` },
@@ -414,10 +569,6 @@
     async: { filename: 'counter.js', code: `let counter = 0;\n\nasync function increment() {\n    const val = counter;\n    await someAsyncOp();\n    counter = val + 1;\n}\n\nPromise.all([increment(), increment(), increment()]);` },
     list: { filename: 'parser.py', code: `def get_last_three(items):\n    return [items[-3], items[-2], items[-1]]\n\nresult = get_last_three([1, 2])\nprint(result)` }
   };
-
-  let currentSnapshotId = null;
-  let currentFixedCode = '';
-  let isIgnored = false;
 
   function openDrawer() {
     document.getElementById('historyDrawer').classList.add('open');
@@ -466,7 +617,7 @@
 
   async function loadHistory() {
     try {
-      const res = await fetch(`${API}/bug-history`);
+      const res = await fetch(`${API}/bug-history`, { headers: getAuthHeaders() });
       const bugs = await res.json();
       document.getElementById('bugCount').textContent = bugs.length;
       const list = document.getElementById('drawerList');
@@ -541,7 +692,7 @@
 
       const res = await fetch(`${API}/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(body)
       });
 
@@ -615,7 +766,7 @@
     try {
       const res = await fetch(`${API}/team/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ name })
       });
       if (!res.ok) throw new Error();
@@ -627,9 +778,7 @@
       document.getElementById('activeTeamBadge').style.display = 'flex';
       document.getElementById('activeTeamName').textContent = data.name;
       showToast(`Team "${data.name}" created! 🎉`);
-    } catch {
-      showToast('Failed to create team', true);
-    }
+    } catch { showToast('Failed to create team', true); }
   }
 
   async function joinTeam() {
@@ -639,7 +788,7 @@
     try {
       const res = await fetch(`${API}/team/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ invite_code, user_identifier })
       });
       if (!res.ok) throw new Error();
@@ -651,9 +800,7 @@
       document.getElementById('activeTeamBadge').style.display = 'flex';
       document.getElementById('activeTeamName').textContent = data.team_name;
       showToast(`Joined "${data.team_name}"! 🎉`);
-    } catch {
-      showToast('Invalid invite code', true);
-    }
+    } catch { showToast('Invalid invite code', true); }
   }
 
   async function toggleIgnore() {
@@ -664,7 +811,7 @@
     try {
       const res = await fetch(`${API}/ignore`, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ code, filename })
       });
       if (!res.ok) throw new Error();
@@ -691,7 +838,7 @@
     try {
       const res = await fetch(`${API}/fix`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ filename, code })
       });
       if (!res.ok) throw new Error();
@@ -727,7 +874,7 @@
     try {
       const res = await fetch(`${API}/log-bug`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ snapshot_id: currentSnapshotId, error_message: message })
       });
       if (!res.ok) throw new Error();
@@ -740,7 +887,7 @@
 
   async function loadStats() {
     try {
-      const res = await fetch(`${API}/stats`);
+      const res = await fetch(`${API}/stats`, { headers: getAuthHeaders() });
       const data = await res.json();
       document.getElementById('statTotalBugs').textContent = data.total_bugs;
       document.getElementById('statTotalSnapshots').textContent = data.total_snapshots;
@@ -800,8 +947,6 @@
   });
 
   updateLineNumbers();
-  loadHistory();
-  loadStats();
 </script>
 </body>
 </html>
