@@ -625,8 +625,3 @@ def health():
         return {"status": "bugpredictor is alive 🚀", "database": "connected"}
     except Exception as e:
         return {"status": "bugpredictor is alive 🚀", "database": "disconnected", "error": str(e)}
-```
-
-Now we need to add `SUPABASE_JWT_SECRET` to Railway. Go to **railway.app** → **Variables** tab and add:
-```
-SUPABASE_JWT_SECRET=your-jwt-secret
