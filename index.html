@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BugPredictor — AI Code Analysis</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root {
     --bg: #0a0a0f;
@@ -53,7 +53,6 @@
   .status-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: blink 2s ease-in-out infinite; }
   @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-  /* Auth Modal */
   .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
   .auth-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 40px; width: 100%; max-width: 420px; position: relative; z-index: 201; animation: fadeUp 0.3s ease; }
   .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; justify-content: center; }
@@ -70,11 +69,6 @@
   .auth-btn.loading { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
   .auth-error { color: var(--accent); font-family: 'Space Mono', monospace; font-size: 11px; margin-top: 10px; text-align: center; min-height: 16px; }
   .auth-success { color: var(--success); font-family: 'Space Mono', monospace; font-size: 11px; margin-top: 10px; text-align: center; min-height: 16px; }
-  .auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
-  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-  .auth-divider span { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
-
-  /* User badge */
   .user-badge { display: flex; align-items: center; gap: 8px; background: rgba(0,229,160,0.08); border: 1px solid rgba(0,229,160,0.2); color: var(--success); font-family: 'Space Mono', monospace; font-size: 11px; padding: 6px 12px; border-radius: 100px; cursor: pointer; transition: all 0.2s; }
   .user-badge:hover { background: rgba(255,60,95,0.08); border-color: var(--accent); color: var(--accent); }
 
@@ -208,7 +202,6 @@
   .md strong { color: var(--accent); }
   .md p { margin: 8px 0; color: var(--text); line-height: 1.7; }
 
-  /* Stats Dashboard */
   .stats-section { margin-top: 48px; padding-bottom: 48px; animation: fadeUp 0.6s ease 0.4s both; }
   .stats-title { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
   .stats-title::before { content: ''; flex: 1; height: 1px; background: var(--border); }
@@ -243,7 +236,6 @@
   .refresh-stats-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; margin-left: auto; display: block; margin-bottom: 16px; }
   .refresh-stats-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* Team Section */
   .team-section { margin-top: 48px; padding-bottom: 48px; }
   .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 768px) { .team-grid { grid-template-columns: 1fr; } }
@@ -262,7 +254,6 @@
 <body>
 <div class="noise"></div>
 
-<!-- Auth Modal -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-modal">
     <div class="auth-logo">
@@ -398,7 +389,6 @@
     </div>
   </div>
 
-  <!-- Team Section -->
   <div class="team-section">
     <div class="stats-title">👥 Team Shared Memory</div>
     <div class="team-grid">
@@ -424,7 +414,6 @@
     </div>
   </div>
 
-  <!-- Stats Dashboard -->
   <div class="stats-section">
     <div class="stats-title">📊 Bug Trends Dashboard</div>
     <button class="refresh-stats-btn" onclick="loadStats()">↻ Refresh Stats</button>
@@ -462,7 +451,7 @@
   const API = 'https://web-production-cb79b.up.railway.app';
   const SUPABASE_URL = 'https://fkdsphqncnckyyxyqcuf.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrZHNwaHFuY25ja3l5eHlxY3VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDcwMjcsImV4cCI6MjA4OTAyMzAyN30.av30LNmwu5prqN2YWASAtmUOQMyD5KDQ1E5tarIvNUY';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let currentTeamId = null;
   let currentTeamName = null;
@@ -471,7 +460,6 @@
   let isIgnored = false;
   let authToken = null;
 
-  // Auth functions
   function switchTab(tab) {
     document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
     document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
@@ -489,12 +477,12 @@
     btn.textContent = 'Logging in...';
     error.textContent = '';
     try {
-      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: err } = await sbClient.auth.signInWithPassword({ email, password });
       if (err) throw err;
       authToken = data.session.access_token;
       document.getElementById('authOverlay').style.display = 'none';
       document.getElementById('userEmail').textContent = email.split('@')[0];
-      showToast(`Welcome back! 🎉`);
+      showToast('Welcome back! 🎉');
       loadHistory();
       loadStats();
     } catch(err) {
@@ -518,7 +506,7 @@
     error.textContent = '';
     success.textContent = '';
     try {
-      const { data, error: err } = await supabase.auth.signUp({ email, password });
+      const { data, error: err } = await sbClient.auth.signUp({ email, password });
       if (err) throw err;
       if (data.session) {
         authToken = data.session.access_token;
@@ -539,7 +527,7 @@
   }
 
   async function logout() {
-    await supabase.auth.signOut();
+    await sbClient.auth.signOut();
     authToken = null;
     document.getElementById('authOverlay').style.display = 'flex';
     showToast('Logged out!');
@@ -551,8 +539,7 @@
     return headers;
   }
 
-  // Check existing session on load
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  sbClient.auth.getSession().then(({ data: { session } }) => {
     if (session) {
       authToken = session.access_token;
       document.getElementById('authOverlay').style.display = 'none';
@@ -689,13 +676,11 @@
     try {
       const body = { filename, code };
       if (currentTeamId) body.team_id = currentTeamId;
-
       const res = await fetch(`${API}/analyze`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(body)
       });
-
       if (!res.ok) throw new Error();
       const data = await res.json();
       currentSnapshotId = data.snapshot_id;
@@ -745,9 +730,8 @@
 
       if (!isNone) {
         document.getElementById('actionButtons').style.display = 'flex';
-        const ignoreBtn = document.getElementById('ignoreBtn');
-        ignoreBtn.textContent = '🚫 Ignore';
-        ignoreBtn.classList.remove('ignored');
+        document.getElementById('ignoreBtn').textContent = '🚫 Ignore';
+        document.getElementById('ignoreBtn').classList.remove('ignored');
       }
 
       showToast('Analysis complete!');
@@ -765,9 +749,7 @@
     if (!name) { showToast('Enter a team name!', true); return; }
     try {
       const res = await fetch(`${API}/team/create`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ name })
+        method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ name })
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -787,9 +769,7 @@
     if (!invite_code || !user_identifier) { showToast('Fill in all fields!', true); return; }
     try {
       const res = await fetch(`${API}/team/join`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ invite_code, user_identifier })
+        method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ invite_code, user_identifier })
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -807,24 +787,17 @@
     const code = document.getElementById('codeInput').value.trim();
     const filename = document.getElementById('filename').value.trim() || 'main.py';
     const btn = document.getElementById('ignoreBtn');
-    const method = isIgnored ? 'DELETE' : 'POST';
     try {
       const res = await fetch(`${API}/ignore`, {
-        method,
+        method: isIgnored ? 'DELETE' : 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ code, filename })
       });
       if (!res.ok) throw new Error();
       isIgnored = !isIgnored;
-      if (isIgnored) {
-        btn.textContent = '✅ Ignored';
-        btn.classList.add('ignored');
-        showToast("Pattern ignored! Won't flag this again 🚫");
-      } else {
-        btn.textContent = '🚫 Ignore';
-        btn.classList.remove('ignored');
-        showToast('Pattern unignored!');
-      }
+      btn.textContent = isIgnored ? '✅ Ignored' : '🚫 Ignore';
+      btn.classList.toggle('ignored', isIgnored);
+      showToast(isIgnored ? "Pattern ignored! Won't flag this again 🚫" : 'Pattern unignored!');
     } catch { showToast('Failed to update ignore list', true); }
   }
 
@@ -837,9 +810,7 @@
     document.getElementById('fixResult').style.display = 'none';
     try {
       const res = await fetch(`${API}/fix`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ filename, code })
+        method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ filename, code })
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -873,8 +844,7 @@
     if (!message || !currentSnapshotId) { showToast('Run analysis first!', true); return; }
     try {
       const res = await fetch(`${API}/log-bug`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
+        method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({ snapshot_id: currentSnapshotId, error_message: message })
       });
       if (!res.ok) throw new Error();
@@ -896,22 +866,12 @@
 
       const maxType = Math.max(...data.bug_types.map(b => b.count), 1);
       document.getElementById('bugTypesChart').innerHTML = data.bug_types.length
-        ? data.bug_types.map(b => `
-          <div class="bar-item">
-            <div class="bar-label">${b.type}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxType)*100}%"></div></div>
-            <div class="bar-count">${b.count}</div>
-          </div>`).join('')
+        ? data.bug_types.map(b => `<div class="bar-item"><div class="bar-label">${b.type}</div><div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxType)*100}%"></div></div><div class="bar-count">${b.count}</div></div>`).join('')
         : '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet</div>';
 
       const maxFile = Math.max(...data.bugs_by_file.map(b => b.count), 1);
       document.getElementById('bugsByFileChart').innerHTML = data.bugs_by_file.length
-        ? data.bugs_by_file.map(b => `
-          <div class="bar-item">
-            <div class="bar-label">${b.filename}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxFile)*100}%; background: linear-gradient(90deg, #4f46e5, #7c3aed)"></div></div>
-            <div class="bar-count">${b.count}</div>
-          </div>`).join('')
+        ? data.bugs_by_file.map(b => `<div class="bar-item"><div class="bar-label">${b.filename}</div><div class="bar-track"><div class="bar-fill" style="width:${(b.count/maxFile)*100}%; background: linear-gradient(90deg, #4f46e5, #7c3aed)"></div></div><div class="bar-count">${b.count}</div></div>`).join('')
         : '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet</div>';
 
       const s = data.severity_breakdown;
@@ -922,10 +882,8 @@
 
       if (data.bugs_over_time.length > 0) {
         const maxCount = Math.max(...data.bugs_over_time.map(d => d.count), 1);
-        document.getElementById('timeline').innerHTML = data.bugs_over_time.map(d => `
-          <div class="timeline-bar" style="height:${Math.max((d.count/maxCount)*100, 5)}%" data-count="${d.count}"></div>`).join('');
-        document.getElementById('timelineLabels').innerHTML = data.bugs_over_time.map(d => `
-          <div class="timeline-label">${d.day.slice(5)}</div>`).join('');
+        document.getElementById('timeline').innerHTML = data.bugs_over_time.map(d => `<div class="timeline-bar" style="height:${Math.max((d.count/maxCount)*100, 5)}%" data-count="${d.count}"></div>`).join('');
+        document.getElementById('timelineLabels').innerHTML = data.bugs_over_time.map(d => `<div class="timeline-label">${d.day.slice(5)}</div>`).join('');
       } else {
         document.getElementById('timeline').innerHTML = '<div style="color: var(--muted); font-family: Space Mono, monospace; font-size: 11px;">No data yet — analyze some code!</div>';
       }
