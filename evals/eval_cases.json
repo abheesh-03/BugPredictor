@@ -1,0 +1,222 @@
+[
+  {
+    "id": "py_div_zero",
+    "language": "python",
+    "filename": "math_utils.py",
+    "description": "Division by zero risk",
+    "code": "def divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\nprint(result)\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "division_by_zero",
+    "expected_line_range": [1, 3],
+    "should_detect": true
+  },
+  {
+    "id": "py_none_deref",
+    "language": "python",
+    "filename": "user_service.py",
+    "description": "None dereference",
+    "code": "def get_username(user):\n    return user.name.upper()\n\nget_username(None)\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "null_dereference",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "py_mutable_default",
+    "language": "python",
+    "filename": "helpers.py",
+    "description": "Mutable default argument",
+    "code": "def append_item(item, lst=[]):\n    lst.append(item)\n    return lst\n\nprint(append_item(1))\nprint(append_item(2))\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "mutable_default",
+    "expected_line_range": [0, 1],
+    "should_detect": true
+  },
+  {
+    "id": "py_sql_injection",
+    "language": "python",
+    "filename": "db.py",
+    "description": "SQL injection vulnerability",
+    "code": "def get_user(username):\n    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n    cursor.execute(query)\n    return cursor.fetchone()\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "sql_injection",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "py_infinite_loop",
+    "language": "python",
+    "filename": "loop_utils.py",
+    "description": "Potential infinite loop",
+    "code": "def count_down(n):\n    while n != 0:\n        n -= 1 if n > 0 else -1\n    return 'done'\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "infinite_loop",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "py_index_error",
+    "language": "python",
+    "filename": "list_utils.py",
+    "description": "Index out of bounds",
+    "code": "def get_first_three(items):\n    return [items[0], items[1], items[2]]\n\nget_first_three([1, 2])\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "index_error",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "py_except_too_broad",
+    "language": "python",
+    "filename": "file_reader.py",
+    "description": "Bare except swallows all errors",
+    "code": "def read_file(path):\n    try:\n        with open(path) as f:\n            return f.read()\n    except:\n        return None\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "broad_exception",
+    "expected_line_range": [4, 5],
+    "should_detect": true
+  },
+  {
+    "id": "py_resource_leak",
+    "language": "python",
+    "filename": "file_ops.py",
+    "description": "File handle never closed",
+    "code": "def read_data(path):\n    f = open(path, 'r')\n    data = f.read()\n    return data\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "resource_leak",
+    "expected_line_range": [1, 3],
+    "should_detect": true
+  },
+  {
+    "id": "js_undefined_access",
+    "language": "javascript",
+    "filename": "api.js",
+    "description": "Accessing property of undefined",
+    "code": "function getUserEmail(response) {\n  return response.data.user.email;\n}\n\ngetUserEmail(null);\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "null_dereference",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "js_loose_equality",
+    "language": "javascript",
+    "filename": "validation.js",
+    "description": "Loose equality comparison",
+    "code": "function isAdmin(user) {\n  if (user.role == 1) {\n    return true;\n  }\n  return false;\n}\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "loose_equality",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "js_missing_await",
+    "language": "javascript",
+    "filename": "fetch_data.js",
+    "description": "Missing await on async call",
+    "code": "async function loadUser(id) {\n  const user = fetch(`/api/users/${id}`);\n  return user.json();\n}\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "missing_await",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "js_no_catch",
+    "language": "javascript",
+    "filename": "request.js",
+    "description": "Async call without error handling",
+    "code": "async function deleteUser(id) {\n  const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });\n  const data = await res.json();\n  return data;\n}\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "missing_error_handling",
+    "expected_line_range": [1, 3],
+    "should_detect": true
+  },
+  {
+    "id": "ts_any_overuse",
+    "language": "typescript",
+    "filename": "parser.ts",
+    "description": "Overuse of any type",
+    "code": "function parseConfig(input: any): any {\n  const result: any = JSON.parse(input);\n  return result.settings.theme;\n}\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "type_safety",
+    "expected_line_range": [0, 2],
+    "should_detect": true
+  },
+  {
+    "id": "ts_null_not_handled",
+    "language": "typescript",
+    "filename": "auth.ts",
+    "description": "Null not handled in strict mode",
+    "code": "function getDisplayName(user: { name: string } | null): string {\n  return user.name.toUpperCase();\n}\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "null_dereference",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "sql_no_where",
+    "language": "python",
+    "filename": "migrations.py",
+    "description": "DELETE without WHERE clause",
+    "code": "def clear_sessions(db):\n    db.execute('DELETE FROM sessions')\n    db.commit()\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "sql_no_where",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  },
+  {
+    "id": "py_clean_simple",
+    "language": "python",
+    "filename": "greet.py",
+    "description": "Clean code — should not flag",
+    "code": "def greet(name: str) -> str:\n    if not name:\n        return 'Hello, stranger!'\n    return f'Hello, {name}!'\n\nprint(greet('Alice'))\n",
+    "expected_severity": "None",
+    "expected_bug_type": "none",
+    "expected_line_range": null,
+    "should_detect": false
+  },
+  {
+    "id": "py_clean_with_guard",
+    "language": "python",
+    "filename": "safe_divide.py",
+    "description": "Clean code with proper guard — should not flag",
+    "code": "def safe_divide(a: float, b: float) -> float:\n    if b == 0:\n        raise ValueError('Cannot divide by zero')\n    return a / b\n",
+    "expected_severity": "None",
+    "expected_bug_type": "none",
+    "expected_line_range": null,
+    "should_detect": false
+  },
+  {
+    "id": "py_clean_file_read",
+    "language": "python",
+    "filename": "reader.py",
+    "description": "Clean file read with context manager — should not flag",
+    "code": "def read_config(path: str) -> str:\n    try:\n        with open(path, 'r') as f:\n            return f.read()\n    except FileNotFoundError:\n        return ''\n",
+    "expected_severity": "None",
+    "expected_bug_type": "none",
+    "expected_line_range": null,
+    "should_detect": false
+  },
+  {
+    "id": "py_type_confusion",
+    "language": "python",
+    "filename": "calculator.py",
+    "description": "Integer vs float division confusion",
+    "code": "def average(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n    return total / len(numbers)\n\nprint(average([]))\n",
+    "expected_severity": "Critical",
+    "expected_bug_type": "division_by_zero",
+    "expected_line_range": [4, 5],
+    "should_detect": true
+  },
+  {
+    "id": "py_wrong_none_check",
+    "language": "python",
+    "filename": "checker.py",
+    "description": "Using == instead of is for None check",
+    "code": "def process(value):\n    if value == None:\n        return 'empty'\n    return str(value)\n",
+    "expected_severity": "Warning",
+    "expected_bug_type": "none_comparison",
+    "expected_line_range": [1, 2],
+    "should_detect": true
+  }
+]
