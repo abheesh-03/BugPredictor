@@ -1,8 +1,13 @@
 {
   "name": "bugpredictor",
   "displayName": "BugPredictor",
-  "description": "AI-powered bug predictor for VS Code",
-  "version": "0.0.5",
+  "description": "AI-powered real-time bug detection for VS Code using Claude AI and vector memory",
+  "version": "0.1.0",
+  "publisher": "abheesh1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abheesh-03/BugPredictor"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -16,7 +21,7 @@
         "bugpredictor.authToken": {
           "type": "string",
           "default": "",
-          "description": "Your BugPredictor JWT auth token (from bugpredictor.github.io/BugPredictor)"
+          "description": "Your BugPredictor JWT auth token (from abheesh-03.github.io/BugPredictor)"
         },
         "bugpredictor.apiUrl": {
           "type": "string",
