@@ -36,9 +36,107 @@ interface BugItem {
     message: string;
     uri: vscode.Uri;
     code: string;
+    similarBugs?: Array<{
+        filename: string;
+        code: string;
+        error_message: string;
+        similarity_score: number;
+    }>;
 }
 
 const bugStore = new Map<string, BugItem[]>();
+
+// ---------------------------------------------------------------------------
+// Status Bar Item
+// ---------------------------------------------------------------------------
+let statusBarItem: vscode.StatusBarItem;
+
+function updateStatusBar(): void {
+    let totalBugs = 0;
+    let criticalBugs = 0;
+    for (const [, bugs] of bugStore) {
+        totalBugs += bugs.length;
+        criticalBugs += bugs.filter(b => b.severity === 'Critical').length;
+    }
+
+    if (totalBugs === 0) {
+        statusBarItem.text = '$(check) BugPredictor: Clean';
+        statusBarItem.backgroundColor = undefined;
+        statusBarItem.tooltip = 'BugPredictor: No bugs detected';
+    } else {
+        const critLabel = criticalBugs > 0 ? ` (${criticalBugs} critical)` : '';
+        statusBarItem.text = `$(bug) BugPredictor: ${totalBugs} bug${totalBugs > 1 ? 's' : ''}${critLabel}`;
+        statusBarItem.backgroundColor = new vscode.ThemeColor(
+            criticalBugs > 0 ? 'statusBarItem.errorBackground' : 'statusBarItem.warningBackground'
+        );
+        statusBarItem.tooltip = `BugPredictor: ${totalBugs} bug(s) found — click to open panel`;
+    }
+    statusBarItem.show();
+}
+
+// ---------------------------------------------------------------------------
+// Hover Provider
+// ---------------------------------------------------------------------------
+class BugPredictorHoverProvider implements vscode.HoverProvider {
+    provideHover(
+        document: vscode.TextDocument,
+        position: vscode.Position
+    ): vscode.Hover | undefined {
+        const uri = document.uri.toString();
+        const bugs = bugStore.get(uri);
+        if (!bugs || bugs.length === 0) { return undefined; }
+
+        const bug = bugs.find(b => {
+            const targetLine = Math.min(b.line, document.lineCount - 1);
+            return position.line === targetLine;
+        });
+
+        if (!bug) { return undefined; }
+
+        const severityIcon = bug.severity === 'Critical' ? '🔴' : '🟡';
+
+        const md = new vscode.MarkdownString('', true);
+        md.isTrusted = true;
+        md.supportHtml = false;
+
+        // Header
+        md.appendMarkdown(`### ${severityIcon} BugPredictor — ${bug.severity}\n\n`);
+
+        // Scores table
+        md.appendMarkdown(`| | |\n|---|---|\n`);
+        md.appendMarkdown(`| **Severity Score** | ${bug.score}/10 |\n`);
+        md.appendMarkdown(`| **Confidence** | ${bug.confidence}% |\n`);
+        md.appendMarkdown(`| **File** | \`${bug.filename}\` |\n`);
+        md.appendMarkdown(`| **Line** | ${bug.line + 1} |\n\n`);
+
+        // Bug description
+        const cleanMessage = bug.message
+            .replace(/\*\*/g, '')
+            .replace(/^#+\s*/gm, '')
+            .trim();
+        md.appendMarkdown(`**Description**\n\n${cleanMessage}\n\n`);
+
+        // Similar past bugs
+        if (bug.similarBugs && bug.similarBugs.length > 0) {
+            md.appendMarkdown(`---\n\n**📚 Seen Before** (${Math.round(bug.similarBugs[0].similarity_score * 100)}% match)\n\n`);
+            md.appendMarkdown(`> ${bug.similarBugs[0].error_message.substring(0, 120)}\n\n`);
+        }
+
+        // Action links
+        md.appendMarkdown(`---\n\n`);
+        const fixArgs = encodeURIComponent(JSON.stringify([bug.uri, bug]));
+        md.appendMarkdown(`[$(wrench) Fix with AI](command:bugpredictor.fixFromLens?${fixArgs})`);
+        md.appendMarkdown(`\u00a0\u00a0\u00a0`);
+        const ignoreArgs = encodeURIComponent(JSON.stringify([bug.uri, bug]));
+        md.appendMarkdown(`[$(eye-closed) Ignore](command:bugpredictor.ignoreFromLens?${ignoreArgs})`);
+
+        const targetLine = Math.min(bug.line, document.lineCount - 1);
+        const lineText = document.lineAt(targetLine).text;
+        const range = new vscode.Range(targetLine, 0, targetLine, lineText.length);
+
+        return new vscode.Hover(md, range);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // CodeLens Provider
@@ -47,9 +145,7 @@ class BugPredictorCodeLensProvider implements vscode.CodeLensProvider {
     private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
     readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
-    refresh(): void {
-        this._onDidChangeCodeLenses.fire();
-    }
+    refresh(): void { this._onDidChangeCodeLenses.fire(); }
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
         const uri = document.uri.toString();
@@ -57,36 +153,28 @@ class BugPredictorCodeLensProvider implements vscode.CodeLensProvider {
         if (!bugs || bugs.length === 0) { return []; }
 
         const lenses: vscode.CodeLens[] = [];
-
         for (const bug of bugs) {
             const targetLine = Math.min(bug.line, document.lineCount - 1);
             const range = new vscode.Range(targetLine, 0, targetLine, 0);
-
             const severityIcon = bug.severity === 'Critical' ? '🔴' : '🟡';
             const shortMsg = bug.message.substring(0, 60) + (bug.message.length > 60 ? '…' : '');
 
-            // Lens 1 — main bug label
             lenses.push(new vscode.CodeLens(range, {
                 title: `${severityIcon} BugPredictor [${bug.score}/10, ${bug.confidence}%]: ${shortMsg}`,
                 command: 'bugpredictor.fixFromLens',
                 arguments: [document.uri, bug]
             }));
-
-            // Lens 2 — fix button
             lenses.push(new vscode.CodeLens(range, {
                 title: '$(wrench) Fix with AI',
                 command: 'bugpredictor.fixFromLens',
                 arguments: [document.uri, bug]
             }));
-
-            // Lens 3 — ignore button
             lenses.push(new vscode.CodeLens(range, {
                 title: '$(eye-closed) Ignore',
                 command: 'bugpredictor.ignoreFromLens',
                 arguments: [document.uri, bug]
             }));
         }
-
         return lenses;
     }
 }
@@ -211,8 +299,15 @@ export function activate(context: vscode.ExtensionContext) {
     const bugScannerProvider = new BugScannerProvider();
     const statsProvider = new StatsProvider();
     const codeLensProvider = new BugPredictorCodeLensProvider();
+    const hoverProvider = new BugPredictorHoverProvider();
 
-    // Register tree views
+    // Status bar
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusBarItem.command = 'bugpredictor.focusPanel';
+    updateStatusBar();
+    context.subscriptions.push(statusBarItem);
+
+    // Tree views
     const bugView = vscode.window.createTreeView('bugpredictorPanel', {
         treeDataProvider: bugScannerProvider,
         showCollapseAll: true
@@ -221,23 +316,34 @@ export function activate(context: vscode.ExtensionContext) {
         treeDataProvider: statsProvider
     });
 
-    // Register CodeLens for all supported languages
+    // CodeLens
     const codeLensDisposable = vscode.languages.registerCodeLensProvider(
         [
-            { language: 'python' },
-            { language: 'javascript' },
-            { language: 'typescript' },
-            { language: 'java' },
-            { language: 'cpp' },
-            { language: 'c' }
+            { language: 'python' }, { language: 'javascript' },
+            { language: 'typescript' }, { language: 'java' },
+            { language: 'cpp' }, { language: 'c' }
         ],
         codeLensProvider
     );
 
-    context.subscriptions.push(bugView, statsView, codeLensDisposable);
+    // Hover
+    const hoverDisposable = vscode.languages.registerHoverProvider(
+        [
+            { language: 'python' }, { language: 'javascript' },
+            { language: 'typescript' }, { language: 'java' },
+            { language: 'cpp' }, { language: 'c' }
+        ],
+        hoverProvider
+    );
+
+    context.subscriptions.push(bugView, statsView, codeLensDisposable, hoverDisposable);
 
     // Commands
     context.subscriptions.push(
+
+        vscode.commands.registerCommand('bugpredictor.focusPanel', () => {
+            vscode.commands.executeCommand('bugpredictorPanel.focus');
+        }),
 
         vscode.commands.registerCommand('bugpredictor.refreshPanel', () => {
             bugScannerProvider.refresh();
@@ -260,6 +366,7 @@ export function activate(context: vscode.ExtensionContext) {
             bugScannerProvider.refresh();
             statsProvider.refresh();
             codeLensProvider.refresh();
+            updateStatusBar();
             vscode.window.showInformationMessage('BugPredictor: All bugs cleared!');
         }),
 
@@ -278,7 +385,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
 
-        // Fix with AI — triggered from CodeLens
+        // Fix with AI — CodeLens + Hover
         vscode.commands.registerCommand('bugpredictor.fixFromLens',
             async (uri: vscode.Uri, bug: BugItem) => {
                 const document = await vscode.workspace.openTextDocument(uri);
@@ -286,84 +393,42 @@ export function activate(context: vscode.ExtensionContext) {
                 const API = getApiUrl();
 
                 await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: 'BugPredictor: Generating fix…',
-                        cancellable: false
-                    },
+                    { location: vscode.ProgressLocation.Notification, title: 'BugPredictor: Generating fix…', cancellable: false },
                     async () => {
                         try {
                             const response = await fetch(`${API}/fix`, {
                                 method: 'POST',
                                 headers: getAuthHeaders(),
-                                body: JSON.stringify({
-                                    filename: bug.filename,
-                                    code: bug.code
-                                })
+                                body: JSON.stringify({ filename: bug.filename, code: bug.code })
                             });
 
-                            if (!response.ok) {
-                                vscode.window.showErrorMessage('BugPredictor: Fix request failed.');
-                                return;
-                            }
+                            if (!response.ok) { vscode.window.showErrorMessage('BugPredictor: Fix request failed.'); return; }
 
-                            const data = await response.json() as {
-                                fixed_code: string;
-                                explanation: string;
-                            };
-
-                            if (!data.fixed_code) {
-                                vscode.window.showErrorMessage('BugPredictor: No fix returned.');
-                                return;
-                            }
+                            const data = await response.json() as { fixed_code: string; explanation: string; };
+                            if (!data.fixed_code) { vscode.window.showErrorMessage('BugPredictor: No fix returned.'); return; }
 
                             const action = await vscode.window.showInformationMessage(
                                 `🔧 Fix ready: ${data.explanation}`,
-                                'Apply Fix',
-                                'Show Diff',
-                                'Dismiss'
+                                'Apply Fix', 'Show Diff', 'Dismiss'
                             );
 
                             if (action === 'Apply Fix') {
-                                const fullRange = new vscode.Range(
-                                    document.positionAt(0),
-                                    document.positionAt(document.getText().length)
-                                );
-                                await editor.edit(editBuilder => {
-                                    editBuilder.replace(fullRange, data.fixed_code);
-                                });
+                                const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
+                                await editor.edit(eb => eb.replace(fullRange, data.fixed_code));
                                 vscode.window.showInformationMessage('BugPredictor: Fix applied! ✅');
 
                             } else if (action === 'Show Diff') {
                                 const tmpUri = uri.with({ path: uri.path + '.bugpredictor-fix' });
-                                await vscode.workspace.fs.writeFile(
-                                    tmpUri,
-                                    Buffer.from(data.fixed_code, 'utf8')
-                                );
-                                await vscode.commands.executeCommand(
-                                    'vscode.diff',
-                                    uri,
-                                    tmpUri,
-                                    `BugPredictor Fix — ${bug.filename}`
-                                );
-                                const applyAfterDiff = await vscode.window.showInformationMessage(
-                                    'Apply this fix?',
-                                    'Apply',
-                                    'Discard'
-                                );
-                                if (applyAfterDiff === 'Apply') {
-                                    const fullRange = new vscode.Range(
-                                        document.positionAt(0),
-                                        document.positionAt(document.getText().length)
-                                    );
-                                    await editor.edit(editBuilder => {
-                                        editBuilder.replace(fullRange, data.fixed_code);
-                                    });
+                                await vscode.workspace.fs.writeFile(tmpUri, Buffer.from(data.fixed_code, 'utf8'));
+                                await vscode.commands.executeCommand('vscode.diff', uri, tmpUri, `BugPredictor Fix — ${bug.filename}`);
+                                const apply = await vscode.window.showInformationMessage('Apply this fix?', 'Apply', 'Discard');
+                                if (apply === 'Apply') {
+                                    const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
+                                    await editor.edit(eb => eb.replace(fullRange, data.fixed_code));
                                     vscode.window.showInformationMessage('BugPredictor: Fix applied! ✅');
                                 }
                                 await vscode.workspace.fs.delete(tmpUri).then(() => {}, () => {});
                             }
-
                         } catch {
                             vscode.window.showErrorMessage('BugPredictor: Could not connect to API.');
                         }
@@ -372,7 +437,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         ),
 
-        // Ignore from CodeLens
+        // Ignore — CodeLens + Hover
         vscode.commands.registerCommand('bugpredictor.ignoreFromLens',
             async (uri: vscode.Uri, bug: BugItem) => {
                 const API = getApiUrl();
@@ -387,6 +452,7 @@ export function activate(context: vscode.ExtensionContext) {
                     bugScannerProvider.refresh();
                     statsProvider.refresh();
                     codeLensProvider.refresh();
+                    updateStatusBar();
                     vscode.window.showInformationMessage(`BugPredictor: Pattern ignored for ${bug.filename}`);
                 } catch {
                     vscode.window.showErrorMessage('BugPredictor: Could not ignore pattern.');
@@ -412,15 +478,9 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Analyze active file on startup
+    // Analyze on startup
     if (vscode.window.activeTextEditor) {
-        analyzeDocument(
-            vscode.window.activeTextEditor.document,
-            false,
-            bugScannerProvider,
-            statsProvider,
-            codeLensProvider
-        );
+        analyzeDocument(vscode.window.activeTextEditor.document, false, bugScannerProvider, statsProvider, codeLensProvider);
     }
 }
 
@@ -511,28 +571,18 @@ async function analyzeDocument(
                 confidence: data.confidence,
                 message: data.prediction,
                 uri: document.uri,
-                code: code
+                code: code,
+                similarBugs: data.similar_past_bugs
             };
             bugStore.set(uri, [bug]);
 
-            showDiagnostics(
-                document,
-                data.prediction,
-                data.severity,
-                data.score,
-                data.confidence,
-                data.bug_line,
-                data.similar_past_bugs
-            );
+            showDiagnostics(document, data.prediction, data.severity, data.score, data.confidence, data.bug_line, data.similar_past_bugs);
 
             if (data.snapshot_id && data.snapshot_id !== 'ignored') {
                 fetch(`${API}/log-bug`, {
                     method: 'POST',
                     headers: getAuthHeaders(),
-                    body: JSON.stringify({
-                        snapshot_id: data.snapshot_id,
-                        error_message: data.prediction.substring(0, 500)
-                    })
+                    body: JSON.stringify({ snapshot_id: data.snapshot_id, error_message: data.prediction.substring(0, 500) })
                 }).catch(() => {});
             }
         }
@@ -540,6 +590,7 @@ async function analyzeDocument(
         bugScannerProvider.refresh();
         statsProvider.refresh();
         codeLensProvider.refresh();
+        updateStatusBar();
 
     } catch {
         // Server unreachable — fail silently
@@ -587,4 +638,5 @@ function showDiagnostics(
 
 export function deactivate() {
     diagnosticCollection.clear();
+    if (statusBarItem) { statusBarItem.dispose(); }
 }
